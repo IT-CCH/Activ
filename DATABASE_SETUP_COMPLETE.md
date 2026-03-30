@@ -15,7 +15,7 @@ This guide covers everything you need to set up the ActivityPlanner database fro
 1. **Go to Supabase**: https://app.supabase.com
 2. **Login** with your Supabase credentials
 3. **Select Project**: Click on **tvyumorjdalhirarzzku**
-4. **Navigate to SQL Editor**: Left sidebar → **SQL Editor**
+4. **Navigate to SQL Editor**: Left sidebar → **SQL Editors**
 
 ---
 
