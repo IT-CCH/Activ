@@ -1,169 +1,69 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Icon from '../../components/AppIcon';
+import supabase from '../../services/supabaseClient';
 
-// Modern Theme Presets with Beautiful Gradients
-const THEME_PRESETS = {
-  modern: {
-    gradient: 'from-slate-200 via-purple-200 to-slate-100',
-    accentColor: '#8b5cf6',
-    colors: ['rgba(139, 92, 246, 0.6)', 'rgba(168, 85, 247, 0.6)', 'rgba(217, 70, 239, 0.6)'],
-  },
-  vibrant: {
-    gradient: 'from-orange-200 via-red-200 to-pink-100',
-    accentColor: '#f97316',
-    colors: ['rgba(249, 115, 22, 0.6)', 'rgba(239, 68, 68, 0.6)', 'rgba(236, 72, 153, 0.6)'],
-  },
-  elegant: {
-    gradient: 'from-amber-100 via-yellow-100 to-amber-50',
-    accentColor: '#f59e0b',
-    colors: ['rgba(245, 158, 11, 0.6)', 'rgba(251, 191, 36, 0.6)', 'rgba(252, 211, 77, 0.6)'],
-  },
-  ocean: {
-    gradient: 'from-cyan-200 via-blue-200 to-teal-100',
-    accentColor: '#06b6d4',
-    colors: ['rgba(6, 182, 212, 0.6)', 'rgba(14, 165, 233, 0.6)', 'rgba(34, 211, 238, 0.6)'],
-  },
-  forest: {
-    gradient: 'from-emerald-200 via-green-200 to-teal-100',
-    accentColor: '#10b981',
-    colors: ['rgba(16, 185, 129, 0.6)', 'rgba(52, 211, 153, 0.6)', 'rgba(110, 231, 183, 0.6)'],
-  },
-  sunset: {
-    gradient: 'from-rose-200 via-orange-200 to-yellow-100',
-    accentColor: '#f59e0b',
-    colors: ['rgba(249, 115, 22, 0.6)', 'rgba(251, 146, 60, 0.6)', 'rgba(251, 191, 36, 0.6)'],
-  },
-  deep: {
-    gradient: 'from-indigo-300 via-purple-300 to-indigo-200',
-    accentColor: '#6366f1',
-    colors: ['rgba(99, 102, 241, 0.6)', 'rgba(129, 140, 248, 0.6)', 'rgba(165, 180, 252, 0.6)'],
-  },
-  pastel: {
-    gradient: 'from-pink-200 via-purple-200 to-blue-200',
-    accentColor: '#a855f7',
-    colors: ['rgba(168, 85, 247, 0.6)', 'rgba(192, 132, 252, 0.6)', 'rgba(216, 180, 254, 0.6)'],
-  },
-  neon: {
-    gradient: 'from-gray-200 via-purple-200 to-gray-100',
-    accentColor: '#22c55e',
-    colors: ['rgba(34, 197, 94, 0.6)', 'rgba(74, 222, 128, 0.6)', 'rgba(134, 239, 172, 0.6)'],
-  },
-  cyberpunk: {
-    gradient: 'from-fuchsia-300 via-cyan-300 to-fuchsia-200',
-    accentColor: '#d946ef',
-    colors: ['rgba(217, 70, 239, 0.6)', 'rgba(34, 211, 238, 0.6)', 'rgba(232, 121, 249, 0.6)'],
-  },
-  candy: {
-    gradient: 'from-pink-200 via-rose-200 to-pink-100',
-    accentColor: '#ec4899',
-    colors: ['rgba(236, 72, 153, 0.6)', 'rgba(244, 114, 182, 0.6)', 'rgba(251, 207, 232, 0.6)'],
-  },
-  rainbow: {
-    gradient: 'from-purple-200 via-pink-200 to-orange-200',
-    accentColor: '#f59e0b',
-    colors: ['rgba(168, 85, 247, 0.6)', 'rgba(236, 72, 153, 0.6)', 'rgba(251, 146, 60, 0.6)'],
-  },
-  tropical: {
-    gradient: 'from-lime-200 via-emerald-200 to-cyan-200',
-    accentColor: '#84cc16',
-    colors: ['rgba(132, 204, 22, 0.6)', 'rgba(52, 211, 153, 0.6)', 'rgba(34, 211, 238, 0.6)'],
-  },
-  cosmic: {
-    gradient: 'from-purple-300 via-indigo-300 to-purple-200',
-    accentColor: '#8b5cf6',
-    colors: ['rgba(139, 92, 246, 0.6)', 'rgba(99, 102, 241, 0.6)', 'rgba(192, 132, 252, 0.6)'],
-  },
-  fire: {
-    gradient: 'from-red-300 via-orange-300 to-yellow-200',
-    accentColor: '#ef4444',
-    colors: ['rgba(239, 68, 68, 0.6)', 'rgba(249, 115, 22, 0.6)', 'rgba(251, 191, 36, 0.6)'],
-  },
-  snow: {
-    gradient: 'from-blue-200 via-cyan-200 to-slate-100',
-    accentColor: '#0ea5e9',
-    colors: ['rgba(14, 165, 233, 0.6)', 'rgba(34, 211, 238, 0.6)', 'rgba(186, 230, 253, 0.6)'],
-  },
-  aurora: {
-    gradient: 'from-green-200 via-cyan-200 to-purple-200',
-    accentColor: '#14b8a6',
-    colors: ['rgba(20, 184, 166, 0.6)', 'rgba(34, 211, 238, 0.6)', 'rgba(168, 85, 247, 0.6)'],
-  },
-  disco: {
-    gradient: 'from-purple-200 via-pink-200 to-purple-100',
-    accentColor: '#ec4899',
-    colors: ['rgba(168, 85, 247, 0.6)', 'rgba(236, 72, 153, 0.6)', 'rgba(244, 114, 182, 0.6)'],
-  },
-  gaming: {
-    gradient: 'from-slate-300 via-lime-200 to-slate-200',
-    accentColor: '#84cc16',
-    colors: ['rgba(132, 204, 22, 0.6)', 'rgba(163, 230, 53, 0.6)', 'rgba(190, 242, 100, 0.6)'],
-  },
-  bloom: {
-    gradient: 'from-rose-200 via-pink-200 to-orange-200',
-    accentColor: '#f43f5e',
-    colors: ['rgba(244, 63, 94, 0.6)', 'rgba(236, 72, 153, 0.6)', 'rgba(251, 146, 60, 0.6)'],
-  },
-  jungle: {
-    gradient: 'from-green-300 via-amber-200 to-green-200',
-    accentColor: '#22c55e',
-    colors: ['rgba(34, 197, 94, 0.6)', 'rgba(132, 204, 22, 0.6)', 'rgba(52, 211, 153, 0.6)'],
-  },
-  lavender: {
-    gradient: 'from-purple-200 via-pink-200 to-blue-200',
-    accentColor: '#a855f7',
-    colors: ['rgba(168, 85, 247, 0.6)', 'rgba(192, 132, 252, 0.6)', 'rgba(216, 180, 254, 0.6)'],
-  },
-  mint: {
-    gradient: 'from-green-200 via-cyan-200 to-blue-200',
-    accentColor: '#14b8a6',
-    colors: ['rgba(20, 184, 166, 0.6)', 'rgba(34, 211, 238, 0.6)', 'rgba(103, 232, 249, 0.6)'],
-  },
-  cherry: {
-    gradient: 'from-pink-200 via-rose-200 to-red-200',
-    accentColor: '#f43f5e',
-    colors: ['rgba(244, 63, 94, 0.6)', 'rgba(251, 113, 133, 0.6)', 'rgba(252, 165, 165, 0.6)'],
-  },
+/* helpers */
+const formatTime = (t) => {
+  if (!t) return '';
+  const [h, m] = t.split(':');
+  const hour = parseInt(h, 10);
+  return `${hour % 12 || 12}:${m || '00'} ${hour >= 12 ? 'PM' : 'AM'}`;
 };
 
-// Floating Particles Component
-const FloatingParticles = ({ colors, count = 20 }) => (
-  <div className="pointer-events-none">
-    {[...Array(count)].map((_, i) => (
-      <motion.div
-        key={i}
-        className="absolute rounded-full"
-        style={{
-          width: Math.random() * 20 + 10,
-          height: Math.random() * 20 + 10,
-          background: `radial-gradient(circle, ${colors[i % colors.length]}, transparent)`,
-        }}
-        initial={{ 
-          x: Math.random() * (typeof window !== 'undefined' ? window.innerWidth : 1920), 
-          y: Math.random() * (typeof window !== 'undefined' ? window.innerHeight : 1080),
-          scale: Math.random() * 0.5 + 0.5
-        }}
-        animate={{ 
-          y: [null, Math.random() * (typeof window !== 'undefined' ? window.innerHeight : 1080)],
-          x: [null, Math.random() * (typeof window !== 'undefined' ? window.innerWidth : 1920)],
-          scale: [null, Math.random() * 1.5 + 0.5],
-          rotate: [0, 360]
-        }}
-        transition={{ 
-          duration: Math.random() * 15 + 10,
-          repeat: Infinity,
-          ease: "easeInOut"
-        }}
-      />
-    ))}
-  </div>
-);
+const DEFAULT_IMAGES = [
+  'https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=800&h=600&fit=crop',
+  'https://images.unsplash.com/photo-1561070791-2526d30994b5?w=800&h=600&fit=crop',
+  'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=800&h=600&fit=crop',
+  'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=800&h=600&fit=crop',
+  'https://images.unsplash.com/photo-1511632765486-a01980e01a18?w=800&h=600&fit=crop',
+];
 
-// Reusable SVG Analog Clock for DateTimeSlide
-const AnalogClock = ({ dateTime, size = 200, accentColor = '#ffffff' }) => {
-  const seconds = dateTime.getSeconds();
-  const minutes = dateTime.getMinutes();
-  const hours = dateTime.getHours() % 12;
+const getStatusStyle = (status) => {
+  const s = (status || 'scheduled').toLowerCase();
+  if (s === 'completed') return { bg: 'bg-emerald-100', text: 'text-emerald-700', label: 'Completed', icon: 'CheckCircle' };
+  if (s === 'cancelled') return { bg: 'bg-red-100', text: 'text-red-600', label: 'Cancelled', icon: 'XCircle' };
+  if (s === 'in_progress' || s === 'in progress') return { bg: 'bg-blue-100', text: 'text-blue-700', label: 'In Progress', icon: 'PlayCircle' };
+  return { bg: 'bg-amber-100', text: 'text-amber-700', label: 'Scheduled', icon: 'Clock' };
+};
+
+/* Live Clock (TV-sized) */
+const TVClock = () => {
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+  const hour = now.getHours();
+  const greeting = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : hour < 21 ? 'Good Evening' : 'Good Night';
+
+  return (
+    <div className="text-center">
+      <motion.p
+        className="text-white/80 text-2xl font-medium mb-1"
+        animate={{ opacity: [0.7, 1, 0.7] }}
+        transition={{ duration: 3, repeat: Infinity }}
+      >
+        {greeting}
+      </motion.p>
+      <p className="text-white text-6xl font-bold font-mono tracking-wider drop-shadow-lg">{timeStr}</p>
+    </div>
+  );
+};
+
+/* Analog Clock (SVG) */
+const AnalogClock = ({ size = 180 }) => {
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const seconds = now.getSeconds();
+  const minutes = now.getMinutes();
+  const hours = now.getHours() % 12;
   const secDeg = seconds * 6;
   const minDeg = minutes * 6 + seconds * 0.1;
   const hourDeg = hours * 30 + minutes * 0.5;
@@ -171,1578 +71,676 @@ const AnalogClock = ({ dateTime, size = 200, accentColor = '#ffffff' }) => {
   const r = c - 8;
 
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="mx-auto">
-      <circle cx={c} cy={c} r={r} fill="#ffffff" stroke={accentColor} strokeWidth="4" />
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="mx-auto drop-shadow-xl">
+      <circle cx={c} cy={c} r={r} fill="rgba(255,255,255,0.15)" stroke="rgba(255,255,255,0.4)" strokeWidth="3" />
       {[...Array(12)].map((_, i) => {
         const ang = i * 30;
-        const x1 = c + Math.sin((ang * Math.PI) / 180) * (r - 8);
-        const y1 = c - Math.cos((ang * Math.PI) / 180) * (r - 8);
+        const x1 = c + Math.sin((ang * Math.PI) / 180) * (r - 10);
+        const y1 = c - Math.cos((ang * Math.PI) / 180) * (r - 10);
         const x2 = c + Math.sin((ang * Math.PI) / 180) * r;
         const y2 = c - Math.cos((ang * Math.PI) / 180) * r;
-        return (
-          <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke={accentColor} strokeWidth={i % 3 === 0 ? 3 : 1} strokeOpacity="0.9" />
-        );
+        return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="rgba(255,255,255,0.7)" strokeWidth={i % 3 === 0 ? 3 : 1} />;
       })}
-
-      <line x1={c} y1={c} x2={c} y2={c - r * 0.5} stroke={accentColor} strokeWidth="8" transform={`rotate(${hourDeg} ${c} ${c})`} strokeLinecap="round" />
-      <line x1={c} y1={c} x2={c} y2={c - r * 0.75} stroke={accentColor} strokeWidth="6" transform={`rotate(${minDeg} ${c} ${c})`} strokeLinecap="round" />
-      <line x1={c} y1={c + r * 0.15} x2={c} y2={c - r * 0.95} stroke="#ef4444" strokeWidth="3" transform={`rotate(${secDeg} ${c} ${c})`} strokeLinecap="round" />
-      <circle cx={c} cy={c} r="5" fill={accentColor} />
+      <line x1={c} y1={c} x2={c} y2={c - r * 0.5} stroke="white" strokeWidth="6" transform={`rotate(${hourDeg} ${c} ${c})`} strokeLinecap="round" />
+      <line x1={c} y1={c} x2={c} y2={c - r * 0.7} stroke="white" strokeWidth="4" transform={`rotate(${minDeg} ${c} ${c})`} strokeLinecap="round" />
+      <line x1={c} y1={c + r * 0.15} x2={c} y2={c - r * 0.9} stroke="#ef4444" strokeWidth="2" transform={`rotate(${secDeg} ${c} ${c})`} strokeLinecap="round" />
+      <circle cx={c} cy={c} r="5" fill="white" />
     </svg>
   );
 };
 
-// Animated Geometric Shapes
-const AnimatedShapes = ({ accentColor }) => (
-  <div className="pointer-events-none">
-    {[...Array(6)].map((_, i) => {
-      const shapeColors = [
-        'rgba(99,102,241,0.1)', 'rgba(236,72,153,0.1)', 
-        'rgba(59,130,246,0.1)', 'rgba(168,85,247,0.1)', 
-        'rgba(251,146,60,0.1)', 'rgba(34,197,94,0.1)'
-      ];
-      return (
-        <motion.div
-          key={i}
-          className="absolute"
-          style={{
-            width: Math.random() * 100 + 50,
-            height: Math.random() * 100 + 50,
-            borderRadius: i % 3 === 0 ? '50%' : Math.random() * 30,
-            background: `linear-gradient(135deg, ${shapeColors[i % 6]}, transparent)`,
-            border: `2px solid ${shapeColors[i % 6].replace('0.1', '0.3')}`,
-            left: `${Math.random() * 100}%`,
-            top: `${Math.random() * 100}%`,
-          }}
-          animate={{
-            x: [0, Math.random() * 200 - 100, 0],
-            y: [0, Math.random() * 200 - 100, 0],
-            rotate: [0, 360],
-            scale: [1, 1.2, 1],
-          }}
-          transition={{
-            duration: Math.random() * 20 + 15,
-            repeat: Infinity,
-            ease: "easeInOut",
-            delay: i * 0.5
-          }}
-        />
-      );
-    })}
-  </div>
-);
+/* Custom Slide (Right Panel - for birthday/special messages) */
+const CustomSlide = ({ slide }) => {
+  const bgGradients = {
+    birthday: 'from-pink-600 via-rose-500 to-orange-400',
+    celebration: 'from-amber-500 via-yellow-400 to-orange-400',
+    announcement: 'from-violet-600 via-indigo-500 to-blue-500',
+    holiday: 'from-emerald-600 via-green-500 to-teal-400',
+    welcome: 'from-sky-500 via-cyan-400 to-teal-400',
+    memorial: 'from-slate-600 via-gray-500 to-slate-400',
+  };
+  const emojis = {
+    birthday: '🎂',
+    celebration: '🎉',
+    announcement: '📢',
+    holiday: '🎄',
+    welcome: '👋',
+    memorial: '🕯️',
+  };
+  const bg = bgGradients[slide.category] || bgGradients.celebration;
+  const emoji = emojis[slide.category] || '✨';
 
-// Gradient Orbs
-const GradientOrbs = () => (
-  <div className="pointer-events-none">
-    <motion.div 
-      className="absolute top-20 right-20 w-[500px] h-[500px] bg-gradient-to-br from-blue-400/30 to-purple-400/30 rounded-full blur-3xl"
-      animate={{ 
-        scale: [1, 1.3, 1],
-        opacity: [0.4, 0.6, 0.4],
-        x: [0, 50, 0],
-        y: [0, 30, 0]
-      }}
-      transition={{ 
-        duration: 10,
-        repeat: Infinity,
-        ease: "easeInOut"
-      }}
-    />
-    <motion.div 
-      className="absolute bottom-20 left-20 w-[500px] h-[500px] bg-gradient-to-br from-pink-400/30 to-orange-400/30 rounded-full blur-3xl"
-      animate={{ 
-        scale: [1.3, 1, 1.3],
-        opacity: [0.6, 0.4, 0.6],
-        x: [0, -50, 0],
-        y: [0, -30, 0]
-      }}
-      transition={{ 
-        duration: 10,
-        repeat: Infinity,
-        ease: "easeInOut"
-      }}
-    />
-    <motion.div 
-      className="absolute top-1/2 left-1/2 w-[600px] h-[600px] bg-gradient-to-br from-indigo-400/20 to-cyan-400/20 rounded-full blur-3xl"
-      animate={{ 
-        scale: [1, 1.4, 1],
-        opacity: [0.3, 0.5, 0.3],
-        rotate: [0, 180, 360]
-      }}
-      transition={{ 
-        duration: 15,
-        repeat: Infinity,
-        ease: "easeInOut"
-      }}
-    />
-  </div>
-);
-
-// Sparkle Effects
-const SparkleEffects = () => (
-  <div className="pointer-events-none">
-    {[...Array(15)].map((_, i) => (
-      <motion.div
-        key={`sparkle-${i}`}
-        className="absolute w-2 h-2 bg-white rounded-full"
-        style={{
-          left: `${Math.random() * 100}%`,
-          top: `${Math.random() * 100}%`,
-        }}
-        animate={{
-          scale: [0, 1.5, 0],
-          opacity: [0, 1, 0],
-        }}
-        transition={{
-          duration: Math.random() * 2 + 1,
-          repeat: Infinity,
-          delay: Math.random() * 3,
-          ease: "easeInOut"
-        }}
-      />
-    ))}
-  </div>
-);
-
-// Modern Slide Content Component
-const ModernSlideContent = ({ slide, accentColor }) => {
-  // YouTube Video Style - Embedded YouTube player
-  if (slide.displayStyle === 'youtube-video' && slide.youtubeUrl) {
-    // Extract video ID
-    const getVideoId = (url) => {
-      if (!url) return null;
-      try {
-        const urlObj = new URL(url);
-        if (urlObj.hostname.includes('youtu.be')) {
-          return urlObj.pathname.slice(1);
-        }
-        if (urlObj.searchParams.get('v')) {
-          return urlObj.searchParams.get('v');
-        }
-      } catch (e) {}
-      if (/^[A-Za-z0-9_-]{11}$/.test(url)) return url;
-      return null;
-    };
-    
-    const videoId = getVideoId(slide.youtubeUrl);
-    
-    if (!videoId) {
-      return (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="text-center"
-        >
-          <div className="text-8xl mb-6">⚠️</div>
-          <p className="text-4xl text-gray-700">Invalid YouTube URL</p>
-        </motion.div>
-      );
-    }
-
-    return (
-      <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.9 }}
-        transition={{ duration: 0.6 }}
-        className="w-full h-full flex flex-col items-center justify-center"
-      >
-        {/* Video Title */}
-        {slide.content && slide.content !== 'YouTube Video' && (
-          <motion.h2
-            className="text-4xl font-bold text-gray-800 mb-6 text-center"
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            {slide.content}
-          </motion.h2>
-        )}
-        
-        {/* YouTube Embed */}
-        <div className="relative w-full max-w-5xl aspect-video rounded-3xl overflow-hidden shadow-2xl border-4 border-white/30">
-          <iframe
-            src={`https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0&controls=1&rel=0&modestbranding=1`}
-            title={slide.content || 'YouTube Video'}
-            className="absolute inset-0 w-full h-full"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-          />
-        </div>
-        
-        {/* Frozen indicator if applicable */}
-        {slide.frozen && (
+  return (
+    <motion.div
+      key={slide.id}
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 1.05 }}
+      transition={{ duration: 0.8, ease: 'easeInOut' }}
+      className={`absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br ${bg}`}
+    >
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        {[...Array(20)].map((_, i) => (
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mt-6 px-6 py-2 bg-cyan-500/20 backdrop-blur-sm rounded-full text-cyan-700 font-medium flex items-center gap-2"
-          >
-            ❄️ Slide Frozen - Video will continue playing
-          </motion.div>
-        )}
-      </motion.div>
-    );
-  }
-
-  // Date/Time Style - Animated date and time display
-  if (slide.displayStyle === 'date-time') {
-    return <DateTimeSlide accentColor={accentColor} />;
-  }
-
-  // Big Icon Style - Large centered icon with text
-  if (slide.displayStyle === 'big-icon') {
-    return (
-      <motion.div
-        initial={{ opacity: 0, scale: 0.5, rotateY: -30 }}
-        animate={{ opacity: 1, scale: 1, rotateY: 0 }}
-        exit={{ opacity: 0, scale: 0.5, rotateY: 30 }}
-        transition={{ duration: 0.8, type: "spring", stiffness: 100 }}
-        className="text-center space-y-12"
-      >
-        {/* Radiating rings behind icon */}
-        {[...Array(3)].map((_, i) => (
-          <motion.div
-            key={`ring-${i}`}
-            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 border-4 rounded-full"
-            style={{ borderColor: `${accentColor}30` }}
-            animate={{
-              scale: [1, 2.5, 2.5],
-              opacity: [0.6, 0, 0],
-            }}
-            transition={{
-              duration: 3,
-              repeat: Infinity,
-              delay: i * 1,
-              ease: "easeOut"
-            }}
+            key={i}
+            className="absolute w-3 h-3 rounded-full bg-white/20"
+            style={{ left: `${Math.random() * 100}%`, top: `${Math.random() * 100}%` }}
+            animate={{ y: [0, -30, 0], opacity: [0.2, 0.6, 0.2], scale: [1, 1.5, 1] }}
+            transition={{ duration: 3 + Math.random() * 4, repeat: Infinity, delay: Math.random() * 2 }}
           />
         ))}
-
-        <motion.div
-          className="text-9xl drop-shadow-2xl relative z-10"
-          animate={{ 
-            rotate: [0, 10, -10, 0],
-            y: [0, -20, 0],
-            scale: [1, 1.1, 1]
-          }}
-          transition={{ 
-            duration: 4,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-        >
-          {slide.icon}
-        </motion.div>
-
-        <motion.div
-          className="font-black text-8xl text-gray-800 drop-shadow-lg relative z-10"
-          animate={{
-            scale: [1, 1.05, 1],
-          }}
-          transition={{ duration: 3, repeat: Infinity }}
-        >
-          {slide.content}
-        </motion.div>
-
-        {slide.subtitle && (
-          <motion.div
-            className="text-gray-700 text-5xl drop-shadow-md"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-          >
-            {slide.subtitle}
-          </motion.div>
-        )}
-      </motion.div>
-    );
-  }
-
-  // Title Style - Prominent title card
-  if (slide.displayStyle === 'title') {
-    return (
+      </div>
       <motion.div
-        initial={{ opacity: 0, scale: 0.8, rotateX: -20 }}
-        animate={{ opacity: 1, scale: 1, rotateX: 0 }}
-        exit={{ opacity: 0, scale: 0.8, rotateX: 20 }}
-        transition={{ duration: 1, type: "spring", stiffness: 150 }}
-        className="text-center space-y-16"
+        className="text-[120px] mb-4"
+        animate={{ scale: [1, 1.15, 1], rotate: [0, 5, -5, 0] }}
+        transition={{ duration: 3, repeat: Infinity }}
       >
-        <motion.div
-          className="text-7xl drop-shadow-lg"
-          animate={{ 
-            rotate: 360,
-            scale: [1, 1.15, 1]
-          }}
-          transition={{ 
-            rotate: { duration: 8, repeat: Infinity, ease: "linear" },
-            scale: { duration: 2, repeat: Infinity, ease: "easeInOut" }
-          }}
-        >
-          {slide.icon}
-        </motion.div>
-
-        <motion.h1
-          className="font-black text-9xl text-gray-800 drop-shadow-xl leading-tight"
-          animate={{
-            backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'],
-          }}
-          transition={{ duration: 8, repeat: Infinity }}
-          style={{
-            backgroundSize: '200% 200%',
-            backgroundImage: `linear-gradient(90deg, #374151, ${accentColor}, #374151)`,
-            WebkitBackgroundClip: 'text',
-            backgroundClip: 'text',
-            color: 'transparent'
-          }}
-        >
-          {slide.content}
-        </motion.h1>
-
-        {slide.subtitle && (
-          <motion.p
-            className="text-gray-700 text-5xl drop-shadow-md"
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-          >
-            {slide.subtitle}
-          </motion.p>
-        )}
+        {slide.emoji || emoji}
       </motion.div>
-    );
-  }
-
-  // List Style - Activities with times
-  if (slide.displayStyle === 'list') {
-    const items = slide.subtitle ? slide.subtitle.split('\n').filter(Boolean) : [];
-    return (
-      <motion.div
-        initial={{ opacity: 0, x: -100 }}
-        animate={{ opacity: 1, x: 0 }}
-        exit={{ opacity: 0, x: 100 }}
-        transition={{ duration: 0.8 }}
-        className="space-y-12 w-full max-w-5xl"
-      >
-        <motion.div
-          className="text-center space-y-8 mb-16"
-          initial={{ opacity: 0, y: -50 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-        >
-          <motion.div
-            className="text-8xl drop-shadow-lg"
-            animate={{ 
-              rotate: [0, 10, -10, 0],
-              scale: [1, 1.15, 1]
-            }}
-            transition={{ duration: 4, repeat: Infinity }}
-          >
-            {slide.icon}
-          </motion.div>
-          <h2 className="text-7xl font-black text-gray-800 drop-shadow-lg">{slide.content}</h2>
-        </motion.div>
-
-        <div className="space-y-6">
-          {items.map((item, index) => (
-            <motion.div
-              key={index}
-              initial={{ opacity: 0, x: -100, rotateY: -20 }}
-              animate={{ opacity: 1, x: 0, rotateY: 0 }}
-              transition={{ 
-                delay: 0.3 + index * 0.15,
-                duration: 0.8,
-                type: "spring",
-                stiffness: 100
-              }}
-              className="flex items-center gap-8 bg-white/70 backdrop-blur-xl rounded-3xl p-8 shadow-2xl border-2 border-white/60 relative overflow-hidden"
-            >
-              {/* Shimmer effect */}
-              <motion.div
-                className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent"
-                animate={{
-                  x: ['-100%', '200%']
-                }}
-                transition={{
-                  duration: 3,
-                  repeat: Infinity,
-                  ease: "linear",
-                  delay: index * 0.5,
-                  repeatDelay: 2
-                }}
-              />
-
-              <motion.div
-                className="text-5xl font-bold text-gray-800 relative z-10"
-                animate={{
-                  scale: [1, 1.05, 1]
-                }}
-                transition={{
-                  duration: 3,
-                  repeat: Infinity,
-                  delay: index * 0.2
-                }}
-              >
-                {item}
-              </motion.div>
-            </motion.div>
-          ))}
-        </div>
-      </motion.div>
-    );
-  }
-
-  // Full Width Style - Banner style
-  if (slide.displayStyle === 'full-width') {
-    return (
-      <motion.div
-        initial={{ opacity: 0, scale: 0.8 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.8 }}
-        transition={{ duration: 0.8 }}
-        className="w-full text-center space-y-10"
-      >
-        <motion.div
-          className="text-9xl drop-shadow-2xl"
-          animate={{ 
-            y: [0, -20, 0],
-            rotate: [0, 5, -5, 0]
-          }}
-          transition={{ duration: 4, repeat: Infinity }}
-        >
-          {slide.icon}
-        </motion.div>
-
-        <motion.div
-          className="font-black text-9xl text-gray-800 drop-shadow-xl px-16"
-          animate={{
-            scale: [1, 1.03, 1]
-          }}
-          transition={{ duration: 3, repeat: Infinity }}
-        >
-          {slide.content}
-        </motion.div>
-
-        {slide.subtitle && (
-          <motion.div
-            className="text-gray-700 text-6xl drop-shadow-md max-w-4xl mx-auto"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.3 }}
-          >
-            {slide.subtitle}
-          </motion.div>
-        )}
-      </motion.div>
-    );
-  }
-
-  // Default Centered Style
-  return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.5, rotateY: -20 }}
-      animate={{ opacity: 1, scale: 1, rotateY: 0 }}
-      exit={{ opacity: 0, scale: 0.5, rotateY: 20 }}
-      transition={{ duration: 1, type: "spring", stiffness: 120 }}
-      className="text-center space-y-12"
-    >
-      <motion.div
-        className="text-9xl drop-shadow-2xl"
-        animate={{ 
-          rotate: [0, 360],
-          y: [0, -20, 0],
-          scale: [1, 1.2, 1]
-        }}
-        transition={{ 
-          rotate: { duration: 20, repeat: Infinity, ease: "linear" },
-          y: { duration: 3, repeat: Infinity, ease: "easeInOut" },
-          scale: { duration: 2, repeat: Infinity, ease: "easeInOut" }
-        }}
-      >
-        {slide.icon}
-      </motion.div>
-
-      <motion.div
-        className="font-black text-9xl text-gray-800 drop-shadow-lg"
-        animate={{
-          scale: [1, 1.05, 1],
-        }}
-        transition={{ duration: 2, repeat: Infinity }}
-      >
-        {slide.content}
-      </motion.div>
-
-      {slide.subtitle && (
-        <motion.div
-          className="text-gray-700 opacity-90 text-5xl drop-shadow-md"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 0.9, y: 0 }}
-          transition={{ delay: 0.3 }}
-        >
-          {slide.subtitle}
-        </motion.div>
-      )}
-    </motion.div>
-  );
-};
-
-// DateTimeSlide component for date/day/time display
-const DateTimeSlide = ({ accentColor }) => {
-  const [dateTime, setDateTime] = useState(new Date());
-
-  const [isCompact, setIsCompact] = useState(false);
-  const [isLarge, setIsLarge] = useState(false);
-  useEffect(() => {
-    const check = () => {
-      const w = window.innerWidth;
-      const h = window.innerHeight;
-      setIsCompact(h < 700 || w < 900);
-      setIsLarge(w >= 1600 || h >= 1000);
-    };
-    check();
-    window.addEventListener('resize', check);
-    return () => window.removeEventListener('resize', check);
-  }, []);
-
-  useEffect(() => {
-    const timer = setInterval(() => setDateTime(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const hour = dateTime.getHours();
-  const greeting = hour < 12 ? 'Good Morning' : hour < 18 ? 'Good Afternoon' : 'Good Evening';
-  const dayName = dateTime.toLocaleDateString('en-US', { weekday: 'long' });
-  const dateStr = dateTime.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-  const timeStr = dateTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.8 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.8 }}
-      transition={{ duration: 0.8 }}
-      className={`text-center ${isCompact ? 'space-y-4 pt-6 pb-36' : isLarge ? 'space-y-8 pt-20 pb-56' : 'space-y-6 pt-12 pb-44'}`}
-      style={{ maxWidth: '100%', boxSizing: 'border-box' }}
-    >
-      {/* Greeting with Sun emoji */}
-      <motion.div
-        animate={{ 
-          rotate: [0, 10, -10, 0],
-          y: [0, isCompact ? -4 : -6, 0]
-        }}
-        transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-        className={`${isCompact ? 'text-5xl' : isLarge ? 'text-9xl' : 'text-7xl'} drop-shadow-2xl`}
-      >
-        ☀️
-      </motion.div>
-
-      {/* Greeting Text */}
-      <motion.h1
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-        className={`${isCompact ? 'text-5xl' : isLarge ? 'text-9xl' : 'text-8xl'} font-black drop-shadow-xl`}
-        style={{ color: accentColor }}
-      >
-        {greeting}
-      </motion.h1>
-
-      {/* Day of Week */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
+      <motion.h2
+        className="text-white text-6xl font-black text-center px-12 mb-4 drop-shadow-2xl leading-tight"
+        initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3 }}
-        className={`${isCompact ? 'text-3xl' : isLarge ? 'text-7xl' : 'text-6xl'} font-bold drop-shadow-lg`}
-        style={{ color: accentColor }}
       >
-        {dayName}
-      </motion.div>
-
-      {/* Full Date */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.4 }}
-        className={`${isCompact ? 'text-xl' : isLarge ? 'text-6xl' : 'text-5xl'} font-semibold text-gray-800 drop-shadow-md`}
-      >
-        {dateStr}
-      </motion.div>
-
-      {/* Analog Clock */}
-      <div className="mt-6">
-        <AnalogClock dateTime={dateTime} size={isCompact ? 120 : isLarge ? 320 : 220} accentColor={accentColor} />
-      </div>
-
-      {/* Time Card */}
-      <motion.div
-        initial={{ opacity: 0, scale: 0.85 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: 0.5, type: "spring", stiffness: 100 }}
-        className={isCompact ? 'inline-block bg-white/90 backdrop-blur-md rounded-3xl px-4 py-2 shadow-2xl border-4' : isLarge ? 'inline-block bg-white/90 backdrop-blur-md rounded-3xl px-12 py-6 shadow-2xl border-4' : 'inline-block bg-white/90 backdrop-blur-md rounded-3xl px-8 py-4 shadow-2xl border-4'}
-        style={{ borderColor: accentColor }}
-      >
-        <motion.div
-          className={`${isCompact ? 'text-xl' : isLarge ? 'text-5xl' : 'text-4xl'} font-bold flex items-center gap-4 drop-shadow-lg`}
-          style={{ color: accentColor }}
-          animate={{ scale: [1, 1.03, 1] }}
-          transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+        {slide.title}
+      </motion.h2>
+      {slide.subtitle && (
+        <motion.p
+          className="text-white/90 text-3xl font-semibold text-center px-16 drop-shadow-lg"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.6 }}
         >
-          <span className={`${isCompact ? 'text-lg' : isLarge ? 'text-4xl' : 'text-3xl'}`}>🕐</span>
-          {timeStr}
-        </motion.div>
-      </motion.div>
+          {slide.subtitle}
+        </motion.p>
+      )}
+      {slide.message && (
+        <motion.p
+          className="text-white/70 text-xl font-medium text-center px-20 mt-4 max-w-3xl"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.9 }}
+        >
+          {slide.message}
+        </motion.p>
+      )}
     </motion.div>
   );
 };
 
-// Main TV Display Component
-const TVDisplayModern = () => {
-  const [config, setConfig] = useState({
-    selectedTheme: 'modern',
-    autoPlay: true,
-    slideInterval: 15,
-    slides: [
-      { id: 1, icon: '👋', content: 'Welcome!', subtitle: '', displayStyle: 'centered' },
-      { id: 2, icon: '📅', content: 'Today\'s Activities', subtitle: '', displayStyle: 'title' },
-    ],
-    showParticles: true,
-    particleCount: 20,
-    music: {
-      enabled: false,
-      type: 'youtube',
-      playlist: '',
-      volume: 50,
-    },
-  });
-
-  // YouTube player ref and state
-  const ytRef = React.useRef(null);
-  const [ytReady, setYtReady] = useState(false);
-  const [ytPlaying, setYtPlaying] = useState(false);
-  const [ytTitle, setYtTitle] = useState('');
-  const [userStartedMusic, setUserStartedMusic] = useState(false);
-  const [playerKey, setPlayerKey] = useState(0);
-  const [iframeSrc, setIframeSrc] = useState('');
-  const [ytMeta, setYtMeta] = useState({ title: '', author: '', thumbnail: '' });
-  const [isPlayingIframe, setIsPlayingIframe] = useState(false);
-
-  // Local music state
-  const audioRef = useRef(null);
-  const [localSongs, setLocalSongs] = useState([]);
-  const [currentSongIndex, setCurrentSongIndex] = useState(0);
-  const [isLocalPlaying, setIsLocalPlaying] = useState(false);
-  const [currentSong, setCurrentSong] = useState(null);
-
-  // Fullscreen state
-  const [showFullscreenPrompt, setShowFullscreenPrompt] = useState(true);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const containerRef = useRef(null);
-
-  // Request fullscreen
-  const enterFullscreen = async () => {
-    try {
-      const elem = containerRef.current || document.documentElement;
-      if (elem.requestFullscreen) {
-        await elem.requestFullscreen();
-      } else if (elem.webkitRequestFullscreen) {
-        await elem.webkitRequestFullscreen();
-      } else if (elem.msRequestFullscreen) {
-        await elem.msRequestFullscreen();
-      }
-      setIsFullscreen(true);
-      setShowFullscreenPrompt(false);
-    } catch (err) {
-      console.warn('Fullscreen request failed:', err);
-      setShowFullscreenPrompt(false);
-    }
-  };
-
-  // Listen for fullscreen changes
-  useEffect(() => {
-    const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
-    };
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
-    return () => {
-      document.removeEventListener('fullscreenchange', handleFullscreenChange);
-      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
-    };
-  }, []);
-
-  // Watch for localStorage changes from control panel (live sync)
-  useEffect(() => {
-    const handleStorageChange = (e) => {
-      if (e.key === 'tvDisplayConfig' && e.newValue) {
-        try {
-          const updated = JSON.parse(e.newValue);
-          setConfig(updated);
-          // Also update local songs if present
-          if (updated.music?.localSongs) {
-            setLocalSongs(updated.music.localSongs);
-          }
-        } catch (err) { console.warn('storage change parse failed', err); }
-      }
-    };
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
-
-  // BroadcastChannel for instant live updates from control panel
-  useEffect(() => {
-    const channel = new BroadcastChannel('tv-display-sync');
-    
-    channel.onmessage = (event) => {
-      if (event.data?.type === 'CONFIG_UPDATE' && event.data.config) {
-        console.log('Live update received:', event.data.config);
-        setConfig(event.data.config);
-        
-        // Update local songs if present
-        if (event.data.config.music?.localSongs) {
-          setLocalSongs(event.data.config.music.localSongs);
-        }
-      }
-    };
-    
-    return () => channel.close();
-  }, []);
-
-  // auto-capture a user gesture (click) anywhere to start music if enabled
-  useEffect(() => {
-    if (!config.music || !config.music.enabled) return;
-    if (userStartedMusic) return;
-    const handler = () => {
-      setUserStartedMusic(true);
-      try { if (ytRef.current && ytRef.current.playVideo) ytRef.current.playVideo(); } catch (e) {}
-      document.removeEventListener('click', handler, true);
-    };
-    document.addEventListener('click', handler, true);
-    return () => document.removeEventListener('click', handler, true);
-  }, [config.music, userStartedMusic]);
-
-  // Play local music
-  useEffect(() => {
-    const musicType = config.music?.type || 'youtube';
-    if (!config.music?.enabled || musicType !== 'local' || localSongs.length === 0) {
-      // Stop any playing audio if conditions not met
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-        setCurrentSong(null);
-        setIsLocalPlaying(false);
-      }
-      return;
-    }
-
-    const playSong = (index) => {
-      const song = localSongs[index];
-      if (!song) return;
-      
-      // Use signedUrl if available, otherwise skip
-      const songUrl = song.signedUrl || song.url;
-      if (!songUrl) {
-        console.warn('No URL for song:', song.name);
-        // Try next song
-        const nextIndex = (index + 1) % localSongs.length;
-        if (nextIndex !== index) {
-          setTimeout(() => playSong(nextIndex), 100);
-        }
-        return;
-      }
-
-      if (audioRef.current) {
-        audioRef.current.pause();
-      }
-
-      audioRef.current = new Audio(songUrl);
-      audioRef.current.volume = (config.music?.volume || 50) / 100;
-      audioRef.current.play().then(() => {
-        setIsLocalPlaying(true);
-        setCurrentSong(song);
-        setCurrentSongIndex(index);
-      }).catch(e => {
-        console.warn('Autoplay blocked, user interaction required:', e);
-        // Set up click handler to start playback
-        const clickHandler = () => {
-          audioRef.current?.play().then(() => {
-            setIsLocalPlaying(true);
-            setCurrentSong(song);
-            setCurrentSongIndex(index);
-          }).catch(() => {});
-          document.removeEventListener('click', clickHandler);
-        };
-        document.addEventListener('click', clickHandler, { once: true });
-      });
-
-      audioRef.current.onended = () => {
-        // Play next song
-        const nextIndex = (index + 1) % localSongs.length;
-        setCurrentSongIndex(nextIndex);
-        playSong(nextIndex);
-      };
-    };
-
-    playSong(currentSongIndex);
-
-    return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
-    };
-  }, [config.music?.enabled, config.music?.type, localSongs, currentSongIndex]);
-
-  // Update local music volume when changed
-  useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.volume = (config.music?.volume || 50) / 100;
-    }
-  }, [config.music?.volume]);
-
-  // Fetch YouTube oEmbed metadata for a video URL (no API key needed)
-  const fetchYtMeta = async (videoOrUrl) => {
-    try {
-      let videoId = videoOrUrl;
-      if (videoOrUrl && videoOrUrl.startsWith('http')) {
-        // if passed a playlist url or full url, try extract id
-        videoId = extractVideoId(videoOrUrl);
-      }
-      if (!videoId) return;
-      const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent('https://www.youtube.com/watch?v=' + videoId)}&format=json`;
-      const res = await fetch(oembedUrl);
-      if (!res.ok) return;
-      const data = await res.json();
-      setYtMeta({ title: data.title || '', author: data.author_name || '', thumbnail: data.thumbnail_url || '' });
-    } catch (e) {
-      // ignore
-    }
-  };
-
-  const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
-  const [progress, setProgress] = useState(0);
-  const [isLoaded, setIsLoaded] = useState(false);
-
-  // Load configuration from localStorage
-  useEffect(() => {
-    const savedConfig = localStorage.getItem('tvDisplayConfig');
-    if (savedConfig) {
-      try {
-        const parsed = JSON.parse(savedConfig);
-        console.log('TVDisplayModern: Loaded config', parsed);
-        console.log('Music settings:', parsed.music);
-        setConfig((prev) => ({
-          ...prev,
-          ...parsed,
-          // Ensure slides array exists and is not empty
-          slides: parsed.slides && parsed.slides.length > 0 ? parsed.slides : prev.slides
-        }));
-        
-        // Load local songs if present
-        if (parsed.music && parsed.music.localSongs && parsed.music.localSongs.length > 0) {
-          console.log('Loading local songs:', parsed.music.localSongs.length);
-          setLocalSongs(parsed.music.localSongs);
-        }
-      } catch (error) {
-        console.error('Failed to parse TV display config:', error);
-      }
-    }
-    setIsLoaded(true);
-  }, []);
-
-  // Helpers to extract YouTube playlist or video IDs
-  const extractPlaylistId = (input) => {
-    if (!input) return '';
-    try {
-      const url = new URL(input);
-      const list = url.searchParams.get('list');
-      if (list) return list;
-    } catch (e) {}
-    if (/^[A-Za-z0-9_-]{10,}$/.test(input)) return input;
-    return '';
-  };
-
-  const extractVideoId = (input) => {
-    if (!input) return '';
-    try {
-      const url = new URL(input);
-      if (url.hostname.includes('youtu.be')) {
-        return url.pathname.slice(1);
-      }
-      if (url.searchParams.get('v')) return url.searchParams.get('v');
-    } catch (e) {}
-    // raw id
-    if (/^[A-Za-z0-9_-]{10,}$/.test(input)) return input;
-    return '';
-  };
-
-  // YouTube Player component (embedded, hidden) - supports playlist or single video
-  const YouTubePlayer = ({ source, volume, onReady, onStateChange }) => {
-    const playerRef = React.useRef(null);
-    const containerRef = React.useRef(null);
-
-    useEffect(() => {
-      const playlistId = extractPlaylistId(source);
-      const videoId = extractVideoId(source);
-      if (!playlistId && !videoId) return;
-
-      const ensureAPI = () => {
-        if (window.__YT_API_PROMISE__) return window.__YT_API_PROMISE__;
-        window.__YT_API_PROMISE__ = new Promise((resolve) => {
-          if (window.YT && window.YT.Player) return resolve(window.YT);
-          const tag = document.createElement('script');
-          tag.src = 'https://www.youtube.com/iframe_api';
-          document.head.appendChild(tag);
-          const prev = window.onYouTubeIframeAPIReady;
-          window.onYouTubeIframeAPIReady = () => {
-            if (typeof prev === 'function') try { prev(); } catch (e) {}
-            resolve(window.YT);
-          };
-        });
-        return window.__YT_API_PROMISE__;
-      };
-
-      // guard: if we've already created a container for this component instance, skip
-      if (containerRef.current) {
-        console.log('YouTubePlayer: container already exists, skipping init');
-        return;
-      }
-
-      // create a dedicated container outside React's managed DOM with a unique id
-      const container = document.createElement('div');
-      const uid = `yt-player-container-${Date.now()}-${Math.floor(Math.random()*10000)}`;
-      container.id = uid;
-      container.style.position = 'absolute';
-      container.style.left = '-9999px';
-      container.style.width = '0px';
-      container.style.height = '0px';
-      document.body.appendChild(container);
-      containerRef.current = container;
-
-      let mounted = true;
-
-      ensureAPI().then((YT) => {
-        if (!mounted) return;
-        try { if (playerRef.current && playerRef.current.destroy) playerRef.current.destroy(); } catch (e) {}
-
-        const playerOpts = {
-          height: '0',
-          width: '0',
-          playerVars: {
-            autoplay: 1,
-            controls: 0,
-            rel: 0,
-            modestbranding: 1,
-          },
-          events: {
-            onReady: (e) => {
-              try { e.target.setVolume(volume); } catch (e) {}
-              // ensure reference to player
-              try { playerRef.current = e.target; } catch (err) {}
-              // load playlist or video in the ready callback to ensure player is fully ready
-              try {
-                if (playlistId && e.target.loadPlaylist) {
-                  e.target.loadPlaylist({ list: playlistId, listType: 'playlist' });
-                } else if (videoId && e.target.loadVideoById) {
-                  e.target.loadVideoById(videoId);
-                }
-              } catch (err) {}
-              onReady && onReady(playerRef.current || e.target);
-            },
-            onStateChange: (e) => onStateChange && onStateChange(e, playerRef.current || e.target),
-            onError: (e) => {
-              console.error('YouTube player error', e);
-            }
-          }
-        };
-
-        // If playlistId is known, provide it in playerVars to help initial load
-        if (playlistId) {
-          playerOpts.playerVars.listType = 'playlist';
-          playerOpts.playerVars.list = playlistId;
-        }
-
-        // prefer passing id string to YT.Player; fallback to element if needed
-        try {
-          console.log('Initializing YT.Player with id', containerRef.current.id);
-          playerRef.current = new YT.Player(containerRef.current.id, playerOpts);
-          console.log('YT.Player constructor returned', playerRef.current);
-        } catch (err) {
-          console.warn('YT.Player init with id failed, falling back to element', err);
-          try {
-            playerRef.current = new YT.Player(containerRef.current, playerOpts);
-            console.log('YT.Player created with element fallback', playerRef.current);
-          } catch (err2) {
-            console.error('YT.Player creation failed', err2);
-            playerRef.current = null;
-          }
-        }
-        console.log('YT player init complete for', containerRef.current.id, { playlistId, videoId });
-
-        // If after a short delay the JS API player isn't available, create an iframe fallback
-        setTimeout(() => {
-          if (!playerRef.current) {
-            try {
-              console.warn('YT JS player not available, creating iframe fallback');
-              const iframe = document.createElement('iframe');
-              let src = '';
-              if (playlistId) {
-                // embed playlist
-                src = `https://www.youtube.com/embed?listType=playlist&list=${encodeURIComponent(playlistId)}&autoplay=1&controls=0&rel=0&modestbranding=1`;
-              } else if (videoId) {
-                src = `https://www.youtube.com/embed/${encodeURIComponent(videoId)}?autoplay=1&controls=0&rel=0&modestbranding=1`;
-              }
-              // ensure JS API is enabled on fallback iframe so we can postMessage commands
-              const fallbackId = `yt-fallback-${Date.now()}-${Math.floor(Math.random()*10000)}`;
-              iframe.src = src + (src.includes('?') ? '&' : '?') + `enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}`;
-              iframe.id = fallbackId;
-              iframe.width = '1';
-              iframe.height = '1';
-              iframe.style.position = 'absolute';
-              iframe.style.left = '-9999px';
-              iframe.style.top = '-9999px';
-              containerRef.current.appendChild(iframe);
-              // expose a minimal control via ytRef (iframe + id) so we can postMessage commands
-              ytRef.current = { iframe };
-            } catch (e) { console.error('iframe fallback creation failed', e); }
-          }
-        }, 2500);
-      }).catch((err) => { console.error('YT API failed to load', err); });
-
-      return () => {
-        mounted = false;
-        try { if (playerRef.current && playerRef.current.destroy) playerRef.current.destroy(); } catch (e) { console.warn('destroy err', e); }
-        try { if (containerRef.current && containerRef.current.parentNode) containerRef.current.parentNode.removeChild(containerRef.current); } catch (e) { console.warn('remove container err', e); }
-      };
-    }, [source]);
-
-    // update volume
-    useEffect(() => {
-      try {
-        if (playerRef.current && playerRef.current.setVolume) playerRef.current.setVolume(volume);
-      } catch (e) {}
-    }, [volume]);
-
-    return null;
-  };
-
-  const theme = THEME_PRESETS[config.selectedTheme] || THEME_PRESETS.modern;
-  
-  // Filter slides: if any slide has presentOnly, show only that one
-  const displaySlides = React.useMemo(() => {
-    if (!config.slides || config.slides.length === 0) return [];
-    const soloSlide = config.slides.find(s => s.presentOnly);
-    return soloSlide ? [soloSlide] : config.slides;
-  }, [config.slides]);
-
-  // Auto-play slide progression (respects frozen slides and presentOnly filter)
-  useEffect(() => {
-    if (!config.autoPlay || displaySlides.length === 0) return;
-    
-    // Check if current slide is frozen
-    const currentSlideData = displaySlides[currentSlideIndex % displaySlides.length];
-    if (currentSlideData?.frozen) {
-      // Slide is frozen - don't advance, keep progress at 100%
-      setProgress(100);
-      return;
-    }
-
-    setProgress(0);
-    const progressInterval = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 100) return 0;
-        return prev + (100 / (config.slideInterval * 10));
-      });
-    }, 100);
-
-    const slideTimer = setTimeout(() => {
-      setCurrentSlideIndex((prev) => (prev + 1) % displaySlides.length);
-    }, config.slideInterval * 1000);
-
-    return () => {
-      clearInterval(progressInterval);
-      clearTimeout(slideTimer);
-    };
-  }, [currentSlideIndex, config.autoPlay, config.slideInterval, displaySlides]);
-  
-  const currentSlide = displaySlides.length > 0 ? displaySlides[currentSlideIndex % displaySlides.length] : null;
-
-  if (!isLoaded) {
-    return (
-      <div className="w-full h-screen flex items-center justify-center bg-gradient-to-br from-gray-200 to-gray-300">
-        <p className="text-4xl text-gray-600 text-center">Loading...</p>
-      </div>
-    );
-  }
-
-  if (!currentSlide || displaySlides.length === 0) {
-    return (
-      <div className="w-full h-screen flex items-center justify-center bg-gradient-to-br from-gray-200 to-gray-300">
-        <p className="text-4xl text-gray-600 text-center">No slides configured</p>
-      </div>
-    );
-  }
+/* Activity Slide (Right Panel) */
+const ActivitySlide = ({ session, index }) => {
+  if (!session) return null;
+  const activity = session?.activities;
+  const catColor = activity?.activity_categories?.color_code || '#7C3AED';
+  const statusInfo = getStatusStyle(session?.status);
+  const imgUrl = activity?.image_url || DEFAULT_IMAGES[index % DEFAULT_IMAGES.length];
 
   return (
-    <div 
-      ref={containerRef}
-      className={`relative w-full h-screen bg-gradient-to-br ${theme.gradient} flex items-center justify-center p-16 ${config.music && config.music.enabled ? 'pb-40 md:pb-48' : ''} overflow-hidden transition-all duration-1000`} 
-      style={{ transform: `scale(${(config && config.uiScale) || 1})`, transformOrigin: 'center top' }}
+    <motion.div
+      key={session.id}
+      initial={{ opacity: 0, x: 80 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -80 }}
+      transition={{ duration: 0.8, ease: 'easeInOut' }}
+      className="absolute inset-0 flex flex-col"
     >
-      {/* Fullscreen Prompt Overlay */}
-      <AnimatePresence>
-        {showFullscreenPrompt && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center cursor-pointer"
-            onClick={enterFullscreen}
-          >
-            <motion.div 
-              className="text-center"
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ delay: 0.1 }}
-            >
-              <motion.div
-                className="w-32 h-32 mx-auto mb-8 rounded-3xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center shadow-2xl"
-                animate={{ scale: [1, 1.05, 1] }}
-                transition={{ duration: 2, repeat: Infinity }}
-              >
-                <svg className="w-16 h-16 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                </svg>
-              </motion.div>
-              <h2 className="text-4xl font-bold text-white mb-4">Click to Enter Fullscreen</h2>
-              <p className="text-xl text-white/70 mb-8">For the best TV display experience</p>
-              <motion.button
-                className="px-8 py-4 bg-gradient-to-r from-purple-500 to-indigo-600 text-white text-xl font-semibold rounded-2xl shadow-xl hover:shadow-2xl"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  enterFullscreen();
-                }}
-              >
-                Enter Fullscreen
-              </motion.button>
-              <p className="text-sm text-white/50 mt-6">Press ESC to exit fullscreen anytime</p>
-              <button 
-                className="mt-4 text-white/50 hover:text-white/80 underline text-sm"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowFullscreenPrompt(false);
-                }}
-              >
-                Skip and continue in window mode
-              </button>
-            </motion.div>
-          </motion.div>
+      <div className="relative flex-1 overflow-hidden">
+        <img
+          src={imgUrl}
+          alt={activity?.name || 'Activity'}
+          className="w-full h-full object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+
+        {activity?.activity_categories?.name && (
+          <div className="absolute top-6 left-6">
+            <span className="px-4 py-2 rounded-full text-white text-lg font-bold shadow-lg" style={{ backgroundColor: catColor }}>
+              {activity.activity_categories.name}
+            </span>
+          </div>
         )}
-      </AnimatePresence>
 
-      {/* Animated Background Elements */}
-      {config.showParticles && <FloatingParticles colors={theme.colors} count={config.particleCount} />}
-      <AnimatedShapes accentColor={theme.accentColor} />
-      <GradientOrbs />
-      <SparkleEffects />
+        <div className="absolute top-6 right-6">
+          <span className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-lg font-bold shadow-lg ${statusInfo.bg} ${statusInfo.text}`}>
+            <Icon name={statusInfo.icon} size={18} />
+            {statusInfo.label}
+          </span>
+        </div>
 
-      {/* Main Content */}
-      <div className="relative z-10 w-full h-full flex items-center justify-center">
-        <AnimatePresence mode="wait">
-          <ModernSlideContent 
-            key={currentSlide.id}
-            slide={currentSlide}
-            accentColor={theme.accentColor}
-          />
-        </AnimatePresence>
+        <div className="absolute bottom-0 left-0 right-0 p-8">
+          <motion.h2
+            className="text-white text-5xl font-black mb-3 drop-shadow-xl leading-tight"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+          >
+            {activity?.name || 'Activity'}
+          </motion.h2>
+
+          <motion.div
+            className="flex flex-wrap items-center gap-4 mb-4"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+          >
+            <span className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm text-white px-4 py-2 rounded-xl text-xl font-semibold">
+              <Icon name="Clock" size={20} />
+              {formatTime(session.start_time)}{session.end_time ? ` - ${formatTime(session.end_time)}` : ''}
+            </span>
+
+            <span className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm text-white px-4 py-2 rounded-xl text-xl font-semibold">
+              <Icon name="MapPin" size={20} />
+              {session.location || activity?.location || 'TBC'}
+            </span>
+
+            {activity?.duration_minutes && (
+              <span className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm text-white px-4 py-2 rounded-xl text-xl font-semibold">
+                <Icon name="Timer" size={20} />
+                {activity.duration_minutes} min
+              </span>
+            )}
+          </motion.div>
+
+          {activity?.description && (
+            <motion.p
+              className="text-white/90 text-2xl leading-relaxed line-clamp-3 max-w-3xl"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.7 }}
+            >
+              {activity.description}
+            </motion.p>
+          )}
+        </div>
       </div>
+    </motion.div>
+  );
+};
 
-      {/* Frozen Slide Indicator */}
-      {currentSlide?.frozen && (
+/* Schedule Item (Left Panel) */
+const ScheduleItem = ({ session, index, isActive }) => {
+  const activity = session?.activities;
+  const catColor = activity?.activity_categories?.color_code || '#7C3AED';
+  const statusInfo = getStatusStyle(session.status);
+  const isCompleted = (session.status || '').toLowerCase() === 'completed';
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: -20 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay: 0.1 * index, duration: 0.4 }}
+      className={`relative rounded-2xl border-2 p-4 transition-all duration-500 ${
+        isActive
+          ? 'border-white/60 bg-white/20 shadow-lg shadow-white/10 scale-[1.02]'
+          : isCompleted
+          ? 'border-emerald-400/30 bg-emerald-500/10'
+          : 'border-white/10 bg-white/5 hover:bg-white/10'
+      }`}
+    >
+      {isActive && (
         <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          className="absolute top-8 left-8 px-4 py-2 bg-cyan-500/90 backdrop-blur-sm rounded-full text-white font-medium flex items-center gap-2 shadow-lg z-20"
-        >
-          <span className="text-xl">❄️</span>
-          <span>Slide Frozen</span>
-        </motion.div>
-      )}
-
-      {/* Progress Bar */}
-      {config.autoPlay && (
-        <motion.div 
-          className="absolute bottom-0 left-0 h-2 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500"
-          style={{ 
-            width: `${progress}%`,
-            boxShadow: `0 0 20px ${theme.accentColor}`
-          }}
-          initial={{ width: 0 }}
+          className="absolute -left-1 top-3 bottom-3 w-1.5 rounded-full bg-white"
+          animate={{ opacity: [1, 0.5, 1] }}
+          transition={{ duration: 1.5, repeat: Infinity }}
         />
       )}
 
-      {/* Slide Indicator Dots */}
-      <div className="absolute bottom-12 left-1/2 -translate-x-1/2 flex gap-5 z-50 bg-black/20 backdrop-blur-md px-8 py-4 rounded-full">
-        {displaySlides.length > 0 && displaySlides.map((slide, index) => (
-          <motion.div
-            key={slide.id}
-            className="relative"
-          >
-            {currentSlideIndex % displaySlides.length === index && (
-              <motion.div
-                layoutId="activeDot"
-                className="absolute inset-0 rounded-full"
-                style={{
-                  background: `linear-gradient(to right, ${theme.accentColor}, ${theme.accentColor})`
-                }}
-                initial={false}
-                animate={{
-                  boxShadow: [
-                    `0 0 20px ${theme.accentColor}`,
-                    `0 0 30px ${theme.accentColor}`,
-                    `0 0 20px ${theme.accentColor}`
-                  ]
-                }}
-                transition={{ 
-                  layout: { type: "spring", stiffness: 300, damping: 30 },
-                  boxShadow: { duration: 2, repeat: Infinity }
-                }}
-              />
-            )}
-            <motion.div
-              className={`h-6 rounded-full transition-all duration-300 ${
-                currentSlideIndex % displaySlides.length === index ? "w-16" : "w-6 bg-white/50"
-              }`}
-              animate={currentSlideIndex % displaySlides.length === index ? { 
-                scale: [1, 1.15, 1],
-              } : {}}
-              transition={{ duration: 1, repeat: Infinity }}
-            />
-          </motion.div>
-        ))}
-      </div>
+      <div className="absolute top-0 right-0 w-1 h-full rounded-r-2xl" style={{ backgroundColor: catColor }} />
 
-      {/* Slide Counter */}
-      <div 
-        className="absolute top-8 right-8 text-4xl font-bold px-8 py-4 rounded-2xl bg-white/30 backdrop-blur-md shadow-xl flex items-center gap-4 z-[60]"
-        style={{ color: theme.accentColor }}
-      >
-        {(currentSlideIndex % displaySlides.length) + 1} / {displaySlides.length}
-        
-        {/* Fullscreen Toggle */}
-        <button
-          onClick={async (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            try {
-              if (document.fullscreenElement || document.webkitFullscreenElement) {
-                // Currently in fullscreen - exit
-                if (document.exitFullscreen) {
-                  await document.exitFullscreen();
-                } else if (document.webkitExitFullscreen) {
-                  await document.webkitExitFullscreen();
-                } else if (document.msExitFullscreen) {
-                  await document.msExitFullscreen();
-                }
-              } else {
-                // Not in fullscreen - enter
-                await enterFullscreen();
-              }
-            } catch (err) {
-              console.warn('Fullscreen toggle failed:', err);
-            }
-          }}
-          className="relative p-3 rounded-xl bg-white/20 hover:bg-white/40 active:bg-white/50 transition-colors cursor-pointer z-50"
-          style={{ minWidth: '48px', minHeight: '48px' }}
-          title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
-        >
-          {isFullscreen ? (
-            <svg className="w-8 h-8 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9V4.5M9 9H4.5M9 9L3.5 3.5M15 9h4.5M15 9V4.5M15 9l5.5-5.5M9 15v4.5M9 15H4.5M9 15l-5.5 5.5M15 15h4.5M15 15v4.5m0-4.5l5.5 5.5" />
-            </svg>
-          ) : (
-            <svg className="w-8 h-8 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-            </svg>
+      <div className="flex items-start gap-3">
+        <div className="flex-shrink-0 text-center min-w-[70px]">
+          <p className="text-white text-lg font-bold leading-none">{formatTime(session.start_time)}</p>
+          {session.end_time && (
+            <p className="text-white/50 text-sm mt-1">{formatTime(session.end_time)}</p>
           )}
-        </button>
-      </div>
+        </div>
 
-      {/* Music Player Bar - YouTube */}
-      {config.music && config.music.enabled && config.music.type === 'youtube' && (
-        <>
-          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-32px)] sm:w-[90%] sm:max-w-5xl bg-gradient-to-r from-black/60 to-black/40 backdrop-blur-lg rounded-2xl px-4 sm:px-6 py-2 sm:py-3 flex items-center gap-3 sm:gap-4">
-            {/* Thumbnail */}
-            <div className="w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 hidden sm:block">
-              <img src={ytMeta.thumbnail || (extractVideoId(config.music.playlist) ? `https://img.youtube.com/vi/${extractVideoId(config.music.playlist)}/hqdefault.jpg` : '')} alt="thumb" className="w-full h-full object-cover" />
-            </div>
+        <div className="w-px h-12 bg-white/20 flex-shrink-0 mt-1" />
 
-            {/* Title / Author */}
-            <div className="flex-1 min-w-0">
-              <div className="text-white font-semibold truncate text-sm sm:text-base">{ytMeta.title || (extractVideoId(config.music.playlist) ? 'YouTube Track' : 'Playlist')}</div>
-              <div className="text-xs sm:text-sm text-white/70 truncate">{ytMeta.author || (extractPlaylistId(config.music.playlist) ? 'YouTube Playlist' : '')}</div>
-            </div>
-
-            {/* Controls */}
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => {
-                  setUserStartedMusic(true);
-                  try {
-                    const playlistId = extractPlaylistId(config.music.playlist);
-                    const videoId = extractVideoId(config.music.playlist);
-
-                    // If JS API player is ready, use it
-                    if (ytRef.current && (ytRef.current.playVideo || ytRef.current.getPlayerState)) {
-                      if (videoId && ytRef.current.loadVideoById) ytRef.current.loadVideoById(videoId);
-                      else if (playlistId && ytRef.current.loadPlaylist) ytRef.current.loadPlaylist({ list: playlistId, listType: 'playlist' });
-                      if (ytRef.current.playVideo) ytRef.current.playVideo();
-                    } else {
-                      // fallback: create a hidden iframe embed with autoplay
-                      try {
-                        const iframe = document.createElement('iframe');
-                        let src = '';
-                        if (playlistId) src = `https://www.youtube.com/embed?listType=playlist&list=${encodeURIComponent(playlistId)}&autoplay=1&controls=0&rel=0&modestbranding=1`;
-                        else if (videoId) src = `https://www.youtube.com/embed/${encodeURIComponent(videoId)}?autoplay=1&controls=0&rel=0&modestbranding=1`;
-                        if (src) {
-                          const fallbackId = `yt-fallback-${Date.now()}-${Math.floor(Math.random()*10000)}`;
-                          iframe.src = src + (src.includes('?') ? '&' : '?') + `enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}`;
-                          iframe.id = fallbackId;
-                          iframe.width = '1';
-                          iframe.height = '1';
-                          iframe.style.position = 'absolute';
-                          iframe.style.left = '-9999px';
-                          iframe.style.top = '-9999px';
-                          iframe.setAttribute('allow', 'autoplay; encrypted-media');
-                          document.body.appendChild(iframe);
-                          // expose minimal iframe handle on ytRef for cleanup and postMessage
-                          ytRef.current = { iframe };
-                          setIsPlayingIframe(true);
-                        }
-                      } catch (err) { console.warn('iframe fallback failed', err); }
-                    }
-                  } catch (e) { console.warn('Play error', e); }
-                  // fetch metadata optimistically
-                  const vid = extractVideoId(config.music.playlist);
-                  fetchYtMeta(vid || (extractPlaylistId(config.music.playlist) ? `https://www.youtube.com/playlist?list=${extractPlaylistId(config.music.playlist)}` : ''));
-                }}
-                className="px-3 py-1 sm:px-4 sm:py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg shadow text-sm"
-              >
-                ▶ Play
-              </button>
-
-              <button
-                onClick={() => {
-                  try {
-                    if (ytRef.current && ytRef.current.pauseVideo) {
-                      ytRef.current.pauseVideo();
-                    } else if (ytRef.current && ytRef.current.iframe) {
-                      // remove iframe fallback to stop playback
-                      try {
-                        const node = ytRef.current.iframe;
-                        if (node && node.parentNode) node.parentNode.removeChild(node);
-                      } catch (e) { console.warn('remove iframe err', e); }
-                      ytRef.current = null;
-                      setIsPlayingIframe(false);
-                    }
-                  } catch (e) { console.warn(e); }
-                }}
-                className="px-3 py-1 sm:px-4 sm:py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg shadow text-sm"
-              >
-                ⏸ Pause
-              </button>
-
-              <div className="flex items-center gap-3">
-                <div className="text-white text-sm flex items-center gap-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M9 4.5a1 1 0 00-1.555-.832L4 6H2a1 1 0 00-1 1v6a1 1 0 001 1h2l3.445 2.332A1 1 0 008 16.5V4.5z"/><path d="M13.5 7a1 1 0 10-1.732-1A5 5 0 0115 11a1 1 0 101.732 1A7 7 0 0013.5 7z"/></svg>
-                </div>
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  value={config.music ? config.music.volume : 50}
-                  onChange={(e) => {
-                    const v = Number(e.target.value);
-                    // update config so future players know desired volume
-                    setConfig((prev) => ({
-                      ...prev,
-                      music: {
-                        ...(prev.music || {}),
-                        volume: v,
-                      },
-                    }));
-
-                    try {
-                      // if JS API player exists, set volume immediately
-                      if (ytRef.current && ytRef.current.setVolume) {
-                        ytRef.current.setVolume(v);
-                      } else if (ytRef.current && ytRef.current.iframe) {
-                        try {
-                          const node = ytRef.current.iframe;
-                          if (node && node.contentWindow) {
-                            node.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'setVolume', args: [v] }), '*');
-                          }
-                        } catch (pmErr) { console.warn('postMessage setVolume failed', pmErr); }
-                      } else {
-                        // no player yet; just persist the desired volume
-                        console.warn('Volume change saved; no player available yet.');
-                      }
-                    } catch (err) { console.warn('setVolume err', err); }
-                  }}
-                  className="w-36 h-1"
-                />
-                <div className="text-white text-sm w-10 text-right">{config.music ? config.music.volume : 50}%</div>
-              </div>
-
-              <a
-                className="px-3 py-2 bg-white/10 rounded text-white"
-                href={config.music.playlist || '#'}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Open in YouTube
-              </a>
-            </div>
-          </div>
-          {/* Ensure a single hidden JS API player is mounted and controlled via `ytRef` */}
-          <YouTubePlayer
-            key={playerKey}
-            source={config.music.playlist}
-            volume={config.music.volume}
-            onReady={(player) => {
-              ytRef.current = player;
-              setYtReady(true);
-              try { const d = player.getVideoData(); setYtTitle(d && d.title ? d.title : ''); } catch (e) {}
-            }}
-            onStateChange={(e, player) => {
-              setYtPlaying(e && e.data === 1);
-              try { const d = player && player.getVideoData ? player.getVideoData() : null; if (d && d.title) setYtTitle(d.title); } catch (e) {}
-            }}
-          />
-        </>
-      )}
-
-      {/* Music Player Bar - Local Music */}
-      {config.music && config.music.enabled && config.music.type === 'local' && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-32px)] sm:w-[90%] sm:max-w-5xl bg-gradient-to-r from-purple-900/60 to-indigo-900/60 backdrop-blur-lg rounded-2xl px-4 sm:px-6 py-2 sm:py-3 flex items-center gap-3 sm:gap-4">
-          {/* Album Art / Music Icon */}
-          <div className="w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 hidden sm:block bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center">
-            <Icon name="Music" size={28} className="text-white" />
-          </div>
-
-          {/* Title / Artist */}
-          <div className="flex-1 min-w-0">
-            {currentSong ? (
-              <>
-                <div className="text-white font-semibold truncate text-sm sm:text-base flex items-center gap-2">
-                  {isLocalPlaying && (
-                    <span className="flex gap-0.5 items-end h-4">
-                      <span className="w-1 bg-purple-400 animate-pulse" style={{ height: '60%', animationDelay: '0s' }}></span>
-                      <span className="w-1 bg-purple-400 animate-pulse" style={{ height: '100%', animationDelay: '0.1s' }}></span>
-                      <span className="w-1 bg-purple-400 animate-pulse" style={{ height: '40%', animationDelay: '0.2s' }}></span>
-                    </span>
-                  )}
-                  {currentSong.name}
-                </div>
-                <div className="text-xs sm:text-sm text-white/70 truncate">{currentSong.artist || 'Unknown Artist'}</div>
-              </>
-            ) : localSongs.length > 0 ? (
-              <>
-                <div className="text-white font-semibold truncate text-sm sm:text-base">Local Playlist</div>
-                <div className="text-xs sm:text-sm text-white/70">{localSongs.length} songs • Click to play</div>
-              </>
-            ) : (
-              <>
-                <div className="text-white font-semibold truncate text-sm sm:text-base">No Songs</div>
-                <div className="text-xs sm:text-sm text-white/70">Select a playlist in control panel</div>
-              </>
+        <div className="flex-1 min-w-0">
+          <h4 className="text-white text-lg font-bold truncate leading-snug">{activity?.name || 'Activity'}</h4>
+          <div className="flex items-center gap-2 mt-1 flex-wrap">
+            <span className="inline-flex items-center gap-1 text-white/60 text-sm">
+              <Icon name="MapPin" size={12} />
+              {session.location || activity?.location || 'TBC'}
+            </span>
+            {activity?.activity_categories?.name && (
+              <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: catColor + '30', color: catColor }}>
+                {activity.activity_categories.name}
+              </span>
             )}
           </div>
-
-          {/* Controls */}
-          <div className="flex items-center gap-2 sm:gap-3">
-            {/* Previous */}
-            <button
-              onClick={() => {
-                const prevIndex = (currentSongIndex - 1 + localSongs.length) % localSongs.length;
-                setCurrentSongIndex(prevIndex);
-              }}
-              disabled={localSongs.length === 0}
-              className="p-2 sm:p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors disabled:opacity-50"
-              title="Previous Song"
-            >
-              <Icon name="SkipBack" size={18} />
-            </button>
-
-            {/* Play/Pause */}
-            <button
-              onClick={() => {
-                if (audioRef.current) {
-                  if (isLocalPlaying) {
-                    audioRef.current.pause();
-                    setIsLocalPlaying(false);
-                  } else {
-                    audioRef.current.play().then(() => setIsLocalPlaying(true)).catch(() => {});
-                  }
-                }
-              }}
-              disabled={localSongs.length === 0}
-              className="p-3 sm:p-4 bg-purple-500 hover:bg-purple-600 text-white rounded-full transition-colors shadow-lg disabled:opacity-50"
-              title={isLocalPlaying ? 'Pause' : 'Play'}
-            >
-              <Icon name={isLocalPlaying ? 'Pause' : 'Play'} size={20} />
-            </button>
-
-            {/* Next */}
-            <button
-              onClick={() => {
-                const nextIndex = (currentSongIndex + 1) % localSongs.length;
-                setCurrentSongIndex(nextIndex);
-              }}
-              disabled={localSongs.length === 0}
-              className="p-2 sm:p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors disabled:opacity-50"
-              title="Next Song"
-            >
-              <Icon name="SkipForward" size={18} />
-            </button>
-
-            {/* Volume */}
-            <div className="hidden sm:flex items-center gap-2 ml-2">
-              <Icon name="Volume2" size={16} className="text-white/70" />
-              <input
-                type="range"
-                min={0}
-                max={100}
-                value={config.music?.volume || 50}
-                onChange={(e) => {
-                  const v = Number(e.target.value);
-                  setConfig((prev) => ({
-                    ...prev,
-                    music: {
-                      ...(prev.music || {}),
-                      volume: v,
-                    },
-                  }));
-                }}
-                className="w-24 h-1"
-              />
-              <div className="text-white text-sm w-10 text-right">{config.music?.volume || 50}%</div>
-            </div>
-
-            {/* Song counter */}
-            {localSongs.length > 0 && (
-              <div className="hidden sm:block text-white/70 text-sm px-3 py-1 bg-white/10 rounded-full">
-                {currentSongIndex + 1} / {localSongs.length}
-              </div>
-            )}
+          <div className="mt-2">
+            <span className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg ${statusInfo.bg} ${statusInfo.text}`}>
+              <Icon name={statusInfo.icon} size={11} />
+              {statusInfo.label}
+            </span>
           </div>
         </div>
-      )}
+      </div>
+    </motion.div>
+  );
+};
 
-      {/* User gesture overlay removed — Play button is primary starter */}
+/* Main TV Display Component */
+const TV_CHANNEL = 'tv-display-sync';
 
-      {/* Music debug panel removed for production */}
+const TVDisplayModern = () => {
+  const [activities, setActivities] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const [now, setNow] = useState(new Date());
+  const [slideInterval, setSlideInterval] = useState(12);
+  const [paused, setPaused] = useState(false);
+  const [careHomeId, setCareHomeId] = useState(null);
+  const [customSlides, setCustomSlides] = useState([]);
+  const scheduleRef = useRef(null);
+  const channelRef = useRef(null);
+  const activitiesRef = useRef([]);
+  const fetchRef = useRef(null);
+  const broadcastRef = useRef(null);
+
+  /* activitiesRef is updated via allSlides effect below */
+
+  /* Load custom slides from localStorage on mount */
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('tv-custom-slides');
+      if (saved) setCustomSlides(JSON.parse(saved));
+    } catch { /* ignore */ }
+  }, []);
+
+  /* BroadcastChannel: receive commands from control panel (single setup, no stale closures) */
+  useEffect(() => {
+    try {
+      channelRef.current = new BroadcastChannel(TV_CHANNEL);
+      channelRef.current.onmessage = (e) => {
+        const msg = e.data;
+        if (!msg || !msg.type) return;
+        const len = activitiesRef.current.length || 1;
+        switch (msg.type) {
+          case 'navigate':
+            if (typeof msg.slide === 'number') setCurrentSlide(msg.slide);
+            break;
+          case 'next':
+            setCurrentSlide((p) => (p + 1) % len);
+            break;
+          case 'prev':
+            setCurrentSlide((p) => (p - 1 + len) % len);
+            break;
+          case 'pause':
+            setPaused(true);
+            break;
+          case 'play':
+            setPaused(false);
+            break;
+          case 'setInterval':
+            if (typeof msg.interval === 'number' && msg.interval >= 3) setSlideInterval(msg.interval);
+            break;
+          case 'refresh':
+            fetchRef.current?.();
+            break;
+          case 'setCareHome':
+            setCareHomeId(msg.careHomeId || null);
+            break;
+          case 'setCustomSlides':
+            if (Array.isArray(msg.slides)) {
+              setCustomSlides(msg.slides);
+              try { localStorage.setItem('tv-custom-slides', JSON.stringify(msg.slides)); } catch {}
+            }
+            break;
+          case 'ping':
+            broadcastRef.current?.();
+            break;
+          default:
+            break;
+        }
+      };
+    } catch { /* BroadcastChannel not supported */ }
+    return () => { channelRef.current?.close(); };
+  }, []); // empty deps — single setup, uses refs for current values
+
+  /* Build combined slides list: activities + custom slides */
+  const allSlides = useMemo(() => {
+    const actSlides = activities.map((s, i) => ({ type: 'activity', data: s, idx: i }));
+    const custSlides = customSlides
+      .filter((s) => s.enabled !== false)
+      .map((s) => ({ type: 'custom', data: s, idx: null }));
+    return [...actSlides, ...custSlides];
+  }, [activities, customSlides]);
+
+  /* Keep total ref updated for BroadcastChannel handler */
+  useEffect(() => { activitiesRef.current = allSlides; }, [allSlides]);
+
+  const broadcastStatus = useCallback(() => {
+    try {
+      channelRef.current?.postMessage({
+        type: 'status',
+        slideIndex: currentSlide,
+        totalSlides: allSlides.length,
+        paused,
+        interval: slideInterval,
+        careHomeId,
+        customSlides,
+        activities: activities.map((s) => ({
+          id: s.id,
+          name: s.activities?.name,
+          start_time: s.start_time,
+          end_time: s.end_time,
+          status: s.status,
+          location: s.location || s.activities?.location,
+          category: s.activities?.activity_categories?.name,
+          categoryColor: s.activities?.activity_categories?.color_code,
+          imageUrl: s.activities?.image_url,
+        })),
+      });
+    } catch { /* ignore */ }
+  }, [currentSlide, allSlides, activities, paused, slideInterval, careHomeId, customSlides]);
+
+  /* keep broadcastRef current */
+  useEffect(() => { broadcastRef.current = broadcastStatus; }, [broadcastStatus]);
+
+  /* broadcast status whenever key state changes */
+  useEffect(() => { broadcastStatus(); }, [broadcastStatus]);
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60000);
+    return () => clearInterval(id);
+  }, []);
+
+  const fetchActivities = useCallback(async () => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+
+      let query = supabase
+        .from('activity_sessions')
+        .select(`
+          id,
+          activity_id,
+          care_home_id,
+          session_date,
+          start_time,
+          end_time,
+          status,
+          location,
+          notes,
+          participants_engaged,
+          participants_not_engaged,
+          completed_at,
+          activities (
+            id,
+            name,
+            description,
+            image_url,
+            duration_minutes,
+            max_participants,
+            location,
+            activity_categories(name, color_code)
+          )
+        `)
+        .eq('session_date', today);
+
+      if (careHomeId) query = query.eq('care_home_id', careHomeId);
+
+      const { data: sessions, error } = await query.order('start_time', { ascending: true });
+
+      if (error) throw error;
+
+      const normalized = (sessions || []).map((s) => ({
+        ...s,
+        status: s.completed_at ? 'completed' : (s.status || 'scheduled').toLowerCase(),
+      }));
+
+      setActivities(normalized);
+      setCurrentSlide((prev) => Math.min(prev, Math.max(0, (normalized.length + customSlides.filter(s => s.enabled !== false).length || 1) - 1)));
+    } catch (err) {
+      console.error('[TVDisplay] Error fetching activities:', err);
+      setError(err.message || 'Failed to load activities');
+    } finally {
+      setLoading(false);
+    }
+  }, [careHomeId, customSlides]);
+
+  /* Keep fetch ref current for BroadcastChannel handler */
+  useEffect(() => { fetchRef.current = fetchActivities; }, [fetchActivities]);
+
+  useEffect(() => {
+    fetchActivities();
+    const id = setInterval(fetchActivities, 120000);
+    return () => clearInterval(id);
+  }, [fetchActivities]);
+
+  useEffect(() => {
+    if (allSlides.length <= 1 || paused) return;
+    const id = setInterval(() => {
+      setCurrentSlide((prev) => (prev + 1) % allSlides.length);
+    }, slideInterval * 1000);
+    return () => clearInterval(id);
+  }, [allSlides.length, slideInterval, paused]);
+
+  useEffect(() => {
+    if (!scheduleRef.current) return;
+    const activeEl = scheduleRef.current.querySelector('[data-active="true"]');
+    if (activeEl) {
+      activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [currentSlide]);
+
+  const stats = useMemo(() => {
+    const total = activities.length;
+    const completed = activities.filter((s) => s.status === 'completed').length;
+    const pending = activities.filter((s) => ['scheduled', 'in_progress', 'in progress'].includes(s.status)).length;
+    const engaged = activities.reduce((sum, s) => sum + (s.participants_engaged || 0), 0);
+    return { total, completed, pending, engaged };
+  }, [activities]);
+
+  const dayName = now.toLocaleDateString('en-US', { weekday: 'long' });
+  const dateStr = now.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
+  return (
+    <div data-persist className="fixed inset-0 flex bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 overflow-hidden">
+      {/* Ambient background */}
+      <div className="pointer-events-none absolute inset-0">
+        <motion.div
+          className="absolute top-0 left-0 w-[600px] h-[600px] bg-gradient-to-br from-violet-600/20 to-indigo-600/20 rounded-full blur-3xl"
+          animate={{ x: [0, 60, 0], y: [0, 40, 0], scale: [1, 1.2, 1] }}
+          transition={{ duration: 20, repeat: Infinity, ease: 'easeInOut' }}
+        />
+        <motion.div
+          className="absolute bottom-0 right-0 w-[500px] h-[500px] bg-gradient-to-br from-pink-600/15 to-orange-600/15 rounded-full blur-3xl"
+          animate={{ x: [0, -50, 0], y: [0, -30, 0], scale: [1.2, 1, 1.2] }}
+          transition={{ duration: 15, repeat: Infinity, ease: 'easeInOut' }}
+        />
+      </div>
+
+      {/* LEFT PANEL */}
+      <div className="relative w-[40%] flex flex-col p-8 border-r border-white/10 overflow-hidden">
+        <div className="text-center mb-6">
+          <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
+            <p className="text-violet-300 text-xl font-semibold uppercase tracking-widest mb-1">{dayName}</p>
+            <h1 className="text-white text-4xl font-black mb-4 drop-shadow-lg">{dateStr}</h1>
+          </motion.div>
+
+          <AnalogClock size={160} />
+
+          <div className="mt-4">
+            <TVClock />
+          </div>
+        </div>
+
+        <div className="h-px bg-gradient-to-r from-transparent via-white/30 to-transparent my-4" />
+
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="grid grid-cols-4 gap-2 mb-4">
+          {[
+            { label: 'Total', value: stats.total, color: 'from-violet-500/30 to-violet-600/30', textColor: 'text-violet-300' },
+            { label: 'Done', value: stats.completed, color: 'from-emerald-500/30 to-emerald-600/30', textColor: 'text-emerald-300' },
+            { label: 'Pending', value: stats.pending, color: 'from-amber-500/30 to-amber-600/30', textColor: 'text-amber-300' },
+            { label: 'Engaged', value: stats.engaged, color: 'from-sky-500/30 to-sky-600/30', textColor: 'text-sky-300' },
+          ].map((s) => (
+            <div key={s.label} className={`bg-gradient-to-br ${s.color} backdrop-blur-sm rounded-xl px-2 py-2 text-center border border-white/10`}>
+              <p className={`text-2xl font-black ${s.textColor}`}>{s.value}</p>
+              <p className="text-white/50 text-[10px] font-bold uppercase tracking-wider">{s.label}</p>
+            </div>
+          ))}
+        </motion.div>
+
+        <div className="flex items-center gap-2 mb-3">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shadow-lg">
+            <Icon name="Calendar" size={16} className="text-white" />
+          </div>
+          <h2 className="text-white text-xl font-bold">Today's Schedule</h2>
+          <span className="ml-auto text-white/40 text-sm font-medium">{allSlides.length} slides</span>
+        </div>
+
+        <div ref={scheduleRef} className="flex-1 overflow-y-auto space-y-3 pr-1" style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.2) transparent' }}>
+          {loading ? (
+            <div className="flex flex-col items-center justify-center h-full gap-3">
+              <div className="w-10 h-10 rounded-full border-3 border-violet-400 border-t-transparent animate-spin" />
+              <p className="text-white/50 text-sm">Loading schedule...</p>
+            </div>
+          ) : activities.length === 0 && customSlides.filter(s => s.enabled !== false).length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full gap-3">
+              <div className="w-16 h-16 rounded-2xl bg-white/10 flex items-center justify-center">
+                <Icon name="Calendar" size={32} className="text-white/30" />
+              </div>
+              <p className="text-white/50 text-lg font-semibold">No activities today</p>
+            </div>
+          ) : (
+            <>
+              {activities.map((session, idx) => (
+                <div key={session.id} data-active={idx === currentSlide ? 'true' : 'false'}>
+                  <ScheduleItem session={session} index={idx} isActive={idx === currentSlide} />
+                </div>
+              ))}
+              {customSlides.filter(s => s.enabled !== false).map((slide, idx) => {
+                const slideIdx = activities.length + idx;
+                return (
+                  <div key={slide.id} data-active={slideIdx === currentSlide ? 'true' : 'false'}>
+                    <motion.div
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.1 * slideIdx, duration: 0.4 }}
+                      className={`relative rounded-2xl border-2 p-4 transition-all duration-500 ${
+                        slideIdx === currentSlide
+                          ? 'border-white/60 bg-white/20 shadow-lg shadow-white/10 scale-[1.02]'
+                          : 'border-white/10 bg-white/5 hover:bg-white/10'
+                      }`}
+                    >
+                      {slideIdx === currentSlide && (
+                        <motion.div
+                          className="absolute -left-1 top-3 bottom-3 w-1.5 rounded-full bg-white"
+                          animate={{ opacity: [1, 0.5, 1] }}
+                          transition={{ duration: 1.5, repeat: Infinity }}
+                        />
+                      )}
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">{slide.emoji || '✨'}</span>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="text-white text-lg font-bold truncate">{slide.title}</h4>
+                          {slide.subtitle && <p className="text-white/50 text-sm truncate">{slide.subtitle}</p>}
+                        </div>
+                        <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-pink-500/30 text-pink-300 capitalize">{slide.category || 'custom'}</span>
+                      </div>
+                    </motion.div>
+                  </div>
+                );
+              })}
+            </>
+          )}
+        </div>
+
+        <div className="mt-4 text-center">
+          <p className="text-white/20 text-xs font-medium">Activity Planner</p>
+        </div>
+      </div>
+
+      {/* RIGHT PANEL */}
+      <div className="relative flex-1 overflow-hidden">
+        {error ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center p-8">
+              <Icon name="AlertTriangle" size={64} className="text-red-400 mx-auto mb-4" />
+              <p className="text-red-400 text-2xl font-bold mb-2">Error Loading Activities</p>
+              <p className="text-white/40 text-lg">{error}</p>
+              <button onClick={() => { setError(null); setLoading(true); fetchActivities(); }} className="mt-4 px-6 py-2 bg-violet-600 text-white rounded-xl font-semibold hover:bg-violet-500 transition-colors">
+                Retry
+              </button>
+            </div>
+          </div>
+        ) : loading ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              <div className="w-16 h-16 rounded-full border-4 border-violet-400 border-t-transparent animate-spin mx-auto mb-4" />
+              <p className="text-white/50 text-xl">Loading activities...</p>
+            </div>
+          </div>
+        ) : allSlides.length === 0 ? (
+          <div className="flex items-center justify-center h-full">
+            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="text-center">
+              <Icon name="CalendarOff" size={80} className="text-white/20 mx-auto mb-6" />
+              <p className="text-white/60 text-4xl font-bold">No Activities Scheduled</p>
+              <p className="text-white/30 text-xl mt-2">Check back later for today's activities</p>
+              <p className="text-white/20 text-sm mt-6">{now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+            </motion.div>
+          </div>
+        ) : (
+          <>
+            <AnimatePresence mode="wait">
+              {(() => {
+                const slide = allSlides[currentSlide] || allSlides[0];
+                if (!slide) return null;
+                if (slide.type === 'custom') {
+                  return <CustomSlide key={`custom-${slide.data.id}`} slide={slide.data} />;
+                }
+                return (
+                  <ActivitySlide
+                    key={`activity-${slide.data?.id}`}
+                    session={slide.data}
+                    index={slide.idx}
+                  />
+                );
+              })()}
+            </AnimatePresence>
+
+            <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-black/30 z-10">
+              <motion.div
+                className="h-full bg-gradient-to-r from-violet-400 to-indigo-400"
+                key={currentSlide}
+                initial={{ width: '0%' }}
+                animate={{ width: '100%' }}
+                transition={{ duration: slideInterval, ease: 'linear' }}
+              />
+            </div>
+
+            {allSlides.length > 1 && (
+              <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2 z-10">
+                {allSlides.map((s, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setCurrentSlide(idx)}
+                    className={`rounded-full transition-all duration-300 ${
+                      idx === currentSlide
+                        ? 'w-8 h-3 bg-white shadow-lg'
+                        : s.type === 'custom'
+                        ? 'w-3 h-3 bg-pink-400/60 hover:bg-pink-300'
+                        : 'w-3 h-3 bg-white/40 hover:bg-white/60'
+                    }`}
+                  />
+                ))}
+              </div>
+            )}
+
+            <div className="absolute top-6 right-6 z-10">
+              <span className="bg-black/40 backdrop-blur-sm text-white px-4 py-2 rounded-full text-lg font-bold">
+                {currentSlide + 1} / {allSlides.length}
+              </span>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 };

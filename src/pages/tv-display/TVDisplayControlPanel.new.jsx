@@ -29,19 +29,8 @@ const TVDisplayControlPanel = () => {
   const [slideInterval, setSlideInterval] = useState(12);
   const [localActivities, setLocalActivities] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [customSlides, setCustomSlides] = useState([]);
-  const [showSlideEditor, setShowSlideEditor] = useState(false);
-  const [editingSlide, setEditingSlide] = useState(null);
   const channelRef = useRef(null);
   const pingRef = useRef(null);
-
-  /* Load custom slides from localStorage */
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem('tv-custom-slides');
-      if (saved) setCustomSlides(JSON.parse(saved));
-    } catch { /* ignore */ }
-  }, []);
 
   /* BroadcastChannel setup */
   useEffect(() => {
@@ -156,49 +145,9 @@ const TVDisplayControlPanel = () => {
     window.open('/tv-display', '_blank', 'noopener,noreferrer');
   };
 
-  /* Custom slides management */
-  const saveCustomSlides = useCallback((slides) => {
-    setCustomSlides(slides);
-    try { localStorage.setItem('tv-custom-slides', JSON.stringify(slides)); } catch {}
-    send({ type: 'setCustomSlides', slides });
-  }, [send]);
-
-  const addCustomSlide = (slide) => {
-    const newSlide = {
-      id: Date.now().toString(),
-      title: slide.title || 'Untitled',
-      subtitle: slide.subtitle || '',
-      message: slide.message || '',
-      category: slide.category || 'celebration',
-      emoji: slide.emoji || '',
-      enabled: true,
-      createdAt: new Date().toISOString(),
-    };
-    saveCustomSlides([...customSlides, newSlide]);
-    setShowSlideEditor(false);
-    setEditingSlide(null);
-  };
-
-  const updateCustomSlide = (updatedSlide) => {
-    const updated = customSlides.map((s) => s.id === updatedSlide.id ? { ...s, ...updatedSlide } : s);
-    saveCustomSlides(updated);
-    setShowSlideEditor(false);
-    setEditingSlide(null);
-  };
-
-  const deleteCustomSlide = (id) => {
-    saveCustomSlides(customSlides.filter((s) => s.id !== id));
-  };
-
-  const toggleCustomSlide = (id) => {
-    const updated = customSlides.map((s) => s.id === id ? { ...s, enabled: !s.enabled } : s);
-    saveCustomSlides(updated);
-  };
-
   const isPaused = tvStatus?.paused ?? false;
   const currentSlide = tvStatus?.slideIndex ?? 0;
-  const enabledCustom = customSlides.filter((s) => s.enabled !== false);
-  const totalSlides = tvStatus?.totalSlides ?? (localActivities.length + enabledCustom.length);
+  const totalSlides = tvStatus?.totalSlides ?? localActivities.length;
   const displayActivities = tvStatus?.activities ?? localActivities.map((s) => ({
     id: s.id,
     name: s.activities?.name,
@@ -472,71 +421,50 @@ const TVDisplayControlPanel = () => {
 
                 {/* Right preview panel */}
                 <div className="flex-1 relative bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 overflow-hidden">
-                  {(() => {
-                    // Determine what's showing on the current slide
-                    const actCount = displayActivities.length;
-                    const enabledCust = customSlides.filter(s => s.enabled !== false);
-                    const isCustomSlide = currentSlide >= actCount && enabledCust[currentSlide - actCount];
-                    const customSlideData = isCustomSlide ? enabledCust[currentSlide - actCount] : null;
-                    const actSlideData = !isCustomSlide && displayActivities[currentSlide] ? displayActivities[currentSlide] : null;
-
-                    if (customSlideData) {
-                      const previewBg = {
-                        birthday: 'from-pink-500 via-rose-400 to-orange-300',
-                        celebration: 'from-amber-400 via-yellow-300 to-orange-300',
-                        announcement: 'from-violet-500 via-indigo-400 to-blue-400',
-                        holiday: 'from-emerald-500 via-green-400 to-teal-300',
-                        welcome: 'from-sky-400 via-cyan-300 to-teal-300',
-                        memorial: 'from-slate-500 via-gray-400 to-slate-300',
-                      };
-                      return (
-                        <div className={`absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br ${previewBg[customSlideData.category] || previewBg.celebration}`}>
-                          <span className="text-3xl mb-1">{customSlideData.emoji || '\u2728'}</span>
-                          <p className="text-white text-sm font-bold text-center px-3 leading-tight">{customSlideData.title}</p>
-                          {customSlideData.subtitle && <p className="text-white/80 text-[10px] text-center px-3 mt-0.5">{customSlideData.subtitle}</p>}
-                        </div>
-                      );
-                    }
-
-                    if (actSlideData) {
-                      return (
-                        <AnimatePresence mode="wait">
-                          <motion.div
-                            key={currentSlide}
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            className="absolute inset-0"
-                          >
-                            {actSlideData.imageUrl ? (
-                              <img src={actSlideData.imageUrl} alt="" className="w-full h-full object-cover" />
-                            ) : (
-                              <div className="w-full h-full bg-gradient-to-br from-violet-900 to-indigo-900" />
+                  {displayActivities.length > 0 && displayActivities[currentSlide] ? (
+                    <AnimatePresence mode="wait">
+                      <motion.div
+                        key={currentSlide}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="absolute inset-0"
+                      >
+                        {displayActivities[currentSlide]?.imageUrl ? (
+                          <img
+                            src={displayActivities[currentSlide].imageUrl}
+                            alt=""
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-gradient-to-br from-violet-900 to-indigo-900" />
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+                        <div className="absolute bottom-0 left-0 right-0 p-4">
+                          <p className="text-white text-lg font-bold leading-tight">
+                            {displayActivities[currentSlide]?.name || 'Activity'}
+                          </p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-white/70 text-[10px]">
+                              {formatTime(displayActivities[currentSlide]?.start_time)}
+                              {displayActivities[currentSlide]?.end_time ? ` - ${formatTime(displayActivities[currentSlide].end_time)}` : ''}
+                            </span>
+                            {displayActivities[currentSlide]?.location && (
+                              <span className="text-white/50 text-[10px]">
+                                {displayActivities[currentSlide].location}
+                              </span>
                             )}
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
-                            <div className="absolute bottom-0 left-0 right-0 p-4">
-                              <p className="text-white text-lg font-bold leading-tight">{actSlideData.name || 'Activity'}</p>
-                              <div className="flex items-center gap-2 mt-1">
-                                <span className="text-white/70 text-[10px]">
-                                  {formatTime(actSlideData.start_time)}
-                                  {actSlideData.end_time ? ` - ${formatTime(actSlideData.end_time)}` : ''}
-                                </span>
-                                {actSlideData.location && (
-                                  <span className="text-white/50 text-[10px]">{actSlideData.location}</span>
-                                )}
-                              </div>
-                            </div>
-                          </motion.div>
-                        </AnimatePresence>
-                      );
-                    }
-
-                    return (
-                      <div className="flex items-center justify-center h-full">
-                        <p className="text-white/30 text-sm">No Slides</p>
+                          </div>
+                        </div>
+                      </motion.div>
+                    </AnimatePresence>
+                  ) : (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="text-center">
+                        <p className="text-white/30 text-sm">No Activities</p>
                       </div>
-                    );
-                  })()}
+                    </div>
+                  )}
 
                   {/* Slide counter */}
                   {totalSlides > 0 && (
@@ -704,318 +632,10 @@ const TVDisplayControlPanel = () => {
                 </div>
               </motion.div>
             )}
-
-            {/* Custom Slides Manager */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-              <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-                <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider flex items-center gap-2">
-                  <Icon name="Sparkles" size={16} className="text-pink-500" />
-                  Custom Slides
-                  <span className="ml-2 px-2 py-0.5 bg-pink-100 text-pink-600 rounded-full text-xs font-bold">
-                    {customSlides.length}
-                  </span>
-                </h3>
-                <button
-                  onClick={() => { setEditingSlide(null); setShowSlideEditor(true); }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-pink-500 to-rose-500 text-white rounded-lg text-xs font-bold shadow-sm hover:shadow-md transition-all hover:scale-105"
-                >
-                  <Icon name="Plus" size={14} />
-                  Add Slide
-                </button>
-              </div>
-
-              {customSlides.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-10 gap-3">
-                  <div className="w-14 h-14 rounded-2xl bg-pink-50 flex items-center justify-center">
-                    <Icon name="PartyPopper" size={28} className="text-pink-300" />
-                  </div>
-                  <p className="text-gray-400 text-sm font-medium">No custom slides yet</p>
-                  <p className="text-gray-300 text-xs max-w-xs text-center">
-                    Add birthday celebrations, special announcements, or holiday messages that will appear on the TV display
-                  </p>
-                  <button
-                    onClick={() => { setEditingSlide(null); setShowSlideEditor(true); }}
-                    className="mt-2 flex items-center gap-2 px-4 py-2 bg-pink-50 text-pink-600 rounded-xl text-sm font-semibold hover:bg-pink-100 border border-pink-200 transition-all"
-                  >
-                    <Icon name="Plus" size={14} />
-                    Create Your First Slide
-                  </button>
-                </div>
-              ) : (
-                <div className="divide-y divide-gray-100 max-h-[400px] overflow-y-auto">
-                  {customSlides.map((slide, idx) => {
-                    const slideIdx = localActivities.length + idx;
-                    const isShowing = slideIdx === currentSlide && slide.enabled !== false;
-                    return (
-                      <div
-                        key={slide.id}
-                        className={`flex items-center gap-3 px-5 py-3 transition-all ${
-                          isShowing ? 'bg-pink-50 border-l-4 border-pink-500' : 'border-l-4 border-transparent hover:bg-gray-50'
-                        } ${slide.enabled === false ? 'opacity-50' : ''}`}
-                      >
-                        <span className="text-2xl flex-shrink-0">{slide.emoji || '\u2728'}</span>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <h4 className="font-bold text-gray-800 text-sm truncate">{slide.title}</h4>
-                            {isShowing && (
-                              <span className="px-2 py-0.5 bg-pink-500 text-white text-[10px] font-bold rounded-full">NOW SHOWING</span>
-                            )}
-                          </div>
-                          {slide.subtitle && <p className="text-gray-400 text-xs truncate">{slide.subtitle}</p>}
-                        </div>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-pink-100 text-pink-600 capitalize flex-shrink-0">
-                          {slide.category || 'custom'}
-                        </span>
-                        <div className="flex items-center gap-1 flex-shrink-0">
-                          <button
-                            onClick={() => toggleCustomSlide(slide.id)}
-                            className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs transition-all ${
-                              slide.enabled !== false
-                                ? 'bg-emerald-100 text-emerald-600 hover:bg-emerald-200'
-                                : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
-                            }`}
-                            title={slide.enabled !== false ? 'Disable' : 'Enable'}
-                          >
-                            <Icon name={slide.enabled !== false ? 'Eye' : 'EyeOff'} size={14} />
-                          </button>
-                          <button
-                            onClick={() => { setEditingSlide(slide); setShowSlideEditor(true); }}
-                            className="w-8 h-8 rounded-lg flex items-center justify-center bg-gray-100 text-gray-500 hover:bg-violet-100 hover:text-violet-600 transition-all"
-                            title="Edit"
-                          >
-                            <Icon name="Pencil" size={14} />
-                          </button>
-                          <button
-                            onClick={() => { goToSlide(slideIdx); }}
-                            className="w-8 h-8 rounded-lg flex items-center justify-center bg-gray-100 text-gray-500 hover:bg-blue-100 hover:text-blue-600 transition-all"
-                            title="Show on TV"
-                          >
-                            <Icon name="Monitor" size={14} />
-                          </button>
-                          <button
-                            onClick={() => deleteCustomSlide(slide.id)}
-                            className="w-8 h-8 rounded-lg flex items-center justify-center bg-gray-100 text-gray-400 hover:bg-red-100 hover:text-red-500 transition-all"
-                            title="Delete"
-                          >
-                            <Icon name="Trash2" size={14} />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
           </div>
         </div>
       </div>
-
-      {/* Slide Editor Modal */}
-      <AnimatePresence>
-        {showSlideEditor && (
-          <SlideEditorModal
-            slide={editingSlide}
-            onSave={editingSlide ? updateCustomSlide : addCustomSlide}
-            onClose={() => { setShowSlideEditor(false); setEditingSlide(null); }}
-          />
-        )}
-      </AnimatePresence>
     </div>
-  );
-};
-
-/* Slide Editor Modal Component */
-const SLIDE_CATEGORIES = [
-  { id: 'birthday', label: 'Birthday', emoji: '\ud83c\udf82', color: 'bg-pink-100 text-pink-700' },
-  { id: 'celebration', label: 'Celebration', emoji: '\ud83c\udf89', color: 'bg-amber-100 text-amber-700' },
-  { id: 'announcement', label: 'Announcement', emoji: '\ud83d\udce2', color: 'bg-violet-100 text-violet-700' },
-  { id: 'holiday', label: 'Holiday', emoji: '\ud83c\udf84', color: 'bg-emerald-100 text-emerald-700' },
-  { id: 'welcome', label: 'Welcome', emoji: '\ud83d\udc4b', color: 'bg-sky-100 text-sky-700' },
-  { id: 'memorial', label: 'Memorial', emoji: '\ud83d\udd6f\ufe0f', color: 'bg-slate-100 text-slate-700' },
-];
-
-const EMOJI_OPTIONS = ['\ud83c\udf82', '\ud83c\udf89', '\ud83c\udf88', '\ud83c\udf81', '\u2764\ufe0f', '\ud83c\udf1f', '\ud83c\udf08', '\ud83c\udf3b', '\u2728', '\ud83c\udfb6', '\ud83e\udd73', '\ud83d\ude0a', '\ud83c\udfc6', '\ud83d\udc96', '\ud83c\udf1e', '\ud83c\udf3a', '\ud83e\udd70', '\ud83d\ude4f', '\ud83c\udf84', '\u2744\ufe0f', '\ud83d\udce2', '\ud83d\udc4b', '\ud83d\udd6f\ufe0f', '\ud83c\udf39', '\ud83c\udf89', '\ud83c\udf86', '\ud83e\udde1', '\ud83d\udc9c'];
-
-const SlideEditorModal = ({ slide, onSave, onClose }) => {
-  const [title, setTitle] = useState(slide?.title || '');
-  const [subtitle, setSubtitle] = useState(slide?.subtitle || '');
-  const [message, setMessage] = useState(slide?.message || '');
-  const [category, setCategory] = useState(slide?.category || 'celebration');
-  const [emoji, setEmoji] = useState(slide?.emoji || '');
-
-  const handleSave = () => {
-    if (!title.trim()) return;
-    onSave({
-      ...(slide || {}),
-      title: title.trim(),
-      subtitle: subtitle.trim(),
-      message: message.trim(),
-      category,
-      emoji,
-    });
-  };
-
-  const selectedCatInfo = SLIDE_CATEGORIES.find((c) => c.id === category);
-  const previewEmoji = emoji || selectedCatInfo?.emoji || '\u2728';
-
-  // Preview gradient colors for categories
-  const previewBg = {
-    birthday: 'from-pink-500 via-rose-400 to-orange-300',
-    celebration: 'from-amber-400 via-yellow-300 to-orange-300',
-    announcement: 'from-violet-500 via-indigo-400 to-blue-400',
-    holiday: 'from-emerald-500 via-green-400 to-teal-300',
-    welcome: 'from-sky-400 via-cyan-300 to-teal-300',
-    memorial: 'from-slate-500 via-gray-400 to-slate-300',
-  };
-
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <motion.div
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.9, opacity: 0 }}
-        className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col"
-      >
-        {/* Modal Header */}
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-            <Icon name="Sparkles" size={20} className="text-pink-500" />
-            {slide ? 'Edit Custom Slide' : 'Add Custom Slide'}
-          </h2>
-          <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 text-gray-400 transition-colors">
-            <Icon name="X" size={18} />
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-6 space-y-5">
-          {/* Mini Preview */}
-          <div className={`rounded-xl overflow-hidden h-36 bg-gradient-to-br ${previewBg[category] || previewBg.celebration} flex flex-col items-center justify-center relative`}>
-            <div className="absolute inset-0 overflow-hidden pointer-events-none">
-              {[...Array(8)].map((_, i) => (
-                <div key={i} className="absolute w-2 h-2 rounded-full bg-white/20" style={{ left: `${Math.random() * 100}%`, top: `${Math.random() * 100}%` }} />
-              ))}
-            </div>
-            <span className="text-4xl mb-1">{previewEmoji}</span>
-            <p className="text-white text-xl font-black text-center px-4 truncate max-w-full drop-shadow-lg">
-              {title || 'Your title here...'}
-            </p>
-            {subtitle && <p className="text-white/80 text-sm font-semibold text-center px-4 truncate max-w-full">{subtitle}</p>}
-          </div>
-
-          {/* Category Selection */}
-          <div>
-            <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">Category</label>
-            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-              {SLIDE_CATEGORIES.map((cat) => (
-                <button
-                  key={cat.id}
-                  onClick={() => setCategory(cat.id)}
-                  className={`flex flex-col items-center gap-1 p-2.5 rounded-xl border-2 transition-all text-center ${
-                    category === cat.id
-                      ? 'border-pink-500 bg-pink-50 shadow-md scale-105'
-                      : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
-                  }`}
-                >
-                  <span className="text-xl">{cat.emoji}</span>
-                  <span className="text-[10px] font-bold text-gray-600">{cat.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Title */}
-          <div>
-            <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">
-              Title <span className="text-red-400">*</span>
-            </label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Happy Birthday Margaret!"
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm font-medium focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition-all"
-              maxLength={100}
-            />
-          </div>
-
-          {/* Subtitle */}
-          <div>
-            <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">Subtitle</label>
-            <input
-              type="text"
-              value={subtitle}
-              onChange={(e) => setSubtitle(e.target.value)}
-              placeholder="e.g. Wishing you a wonderful 85th year!"
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm font-medium focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition-all"
-              maxLength={150}
-            />
-          </div>
-
-          {/* Message */}
-          <div>
-            <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">Message (optional)</label>
-            <textarea
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              placeholder="e.g. From all the staff and residents at Sunny Care Home, we hope your day is filled with joy and laughter!"
-              rows={3}
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm font-medium resize-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition-all"
-              maxLength={300}
-            />
-          </div>
-
-          {/* Emoji Picker */}
-          <div>
-            <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">Custom Emoji (optional)</label>
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => setEmoji('')}
-                className={`w-10 h-10 rounded-lg border-2 flex items-center justify-center text-xs font-bold transition-all ${
-                  !emoji ? 'border-pink-500 bg-pink-50' : 'border-gray-200 hover:border-gray-300'
-                }`}
-                title="Use default"
-              >
-                Auto
-              </button>
-              {EMOJI_OPTIONS.map((em) => (
-                <button
-                  key={em}
-                  onClick={() => setEmoji(em)}
-                  className={`w-10 h-10 rounded-lg border-2 flex items-center justify-center text-xl transition-all ${
-                    emoji === em ? 'border-pink-500 bg-pink-50 scale-110' : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  {em}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Modal Footer */}
-        <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-3 bg-gray-50">
-          <button
-            onClick={onClose}
-            className="px-5 py-2.5 text-sm font-semibold text-gray-600 hover:text-gray-800 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={!title.trim()}
-            className="px-6 py-2.5 bg-gradient-to-r from-pink-500 to-rose-500 text-white text-sm font-bold rounded-xl shadow-lg hover:shadow-xl transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-          >
-            {slide ? 'Update Slide' : 'Add Slide'}
-          </button>
-        </div>
-      </motion.div>
-    </motion.div>
   );
 };
 
