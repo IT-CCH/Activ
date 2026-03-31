@@ -5,6 +5,14 @@ import { getWorldSpecialDaysForMonth, getWorldSpecialDaysForDate } from '../util
 import HolidayFactsModal from './HolidayFactsModal';
 import supabase from '../services/supabaseClient';
 
+/** Format a Date as YYYY-MM-DD in local timezone (avoids UTC shift from toISOString) */
+const toLocalDateStr = (d) => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 const ModernCalendar = ({ testDate, careHomeId }) => {
   const [currentDate, setCurrentDate] = useState(testDate || new Date());
   const [viewMode, setViewMode] = useState('month'); // 'day', 'week', 'month'
@@ -112,8 +120,8 @@ const ModernCalendar = ({ testDate, careHomeId }) => {
       try {
         const start = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
         const end   = new Date(currentDate.getFullYear(), currentDate.getMonth() + 2, 0);
-        const startStr = start.toISOString().split('T')[0];
-        const endStr   = end.toISOString().split('T')[0];
+        const startStr = toLocalDateStr(start);
+        const endStr   = toLocalDateStr(end);
 
         const { data, error } = await supabase
           .from('activity_sessions')
@@ -154,7 +162,7 @@ const ModernCalendar = ({ testDate, careHomeId }) => {
 
   // Return real sessions for a given date as { time, name, color } objects
   const getActivitiesForDate = (date) => {
-    const key = date.toISOString().split('T')[0];
+    const key = toLocalDateStr(date);
     return (sessions[key] || []).map(s => ({
       time: (s.start_time || '').substring(0, 5),
       name: s.activities?.name || 'Activity',
@@ -320,7 +328,7 @@ const ModernCalendar = ({ testDate, careHomeId }) => {
           <h4 className="text-sm font-semibold text-slate-700 mb-3">Upcoming Activities</h4>
           <div className="space-y-2 max-h-36 overflow-y-auto">
             {(() => {
-              const todayKey = new Date().toISOString().split('T')[0];
+              const todayKey = toLocalDateStr(new Date());
               const upcomingDays = Object.keys(sessions)
                 .filter(k => k >= todayKey)
                 .sort()

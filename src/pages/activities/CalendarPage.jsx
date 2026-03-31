@@ -6,6 +6,14 @@ import { useAuth } from '../../context/AuthContext';
 import supabase from '../../services/supabaseClient';
 import { writeAuditLog } from '../../services/activityAuditService';
 
+/** Format a Date as YYYY-MM-DD in local timezone (avoids UTC shift from toISOString) */
+const toLocalDateStr = (d) => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 const CalendarPage = () => {
   const { user, careHomeId, isAdmin, isSuperAdmin, isOrgAdmin, isCareHomeManager, organizationId } = useAuth();
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -134,8 +142,8 @@ const CalendarPage = () => {
             activity_categories(name, color_code)
           )
         `)
-        .gte('session_date', startOfMonth.toISOString().split('T')[0])
-        .lte('session_date', endOfMonth.toISOString().split('T')[0]);
+        .gte('session_date', toLocalDateStr(startOfMonth))
+        .lte('session_date', toLocalDateStr(endOfMonth));
 
       const effectiveId = selectedCareHomeId || careHomeId;
       if (effectiveId) {
@@ -152,7 +160,7 @@ const CalendarPage = () => {
 
   const fetchTodayActivities = async () => {
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const today = toLocalDateStr(new Date());
       let query = supabase
         .from('activity_sessions')
         .select(`
@@ -191,7 +199,7 @@ const CalendarPage = () => {
   const handleScheduleActivity = async (e) => {
     e.preventDefault();
     try {
-      const dateToUse = scheduleFormData.session_date || (selectedDate ? selectedDate.toISOString().split('T')[0] : '');
+      const dateToUse = scheduleFormData.session_date || (selectedDate ? toLocalDateStr(selectedDate) : '');
       if (!dateToUse) {
         alert('Please select a date');
         return;
@@ -267,7 +275,7 @@ const CalendarPage = () => {
   };
 
   const getActivitiesForDate = (date) => {
-    const dateStr = date.toISOString().split('T')[0];
+    const dateStr = toLocalDateStr(date);
     return scheduledActivities.filter(session => session.session_date === dateStr);
   };
 
@@ -885,7 +893,7 @@ const CalendarPage = () => {
                     type="date"
                     value={
                       scheduleFormData.session_date ||
-                      (selectedDate ? selectedDate.toISOString().split('T')[0] : '')
+                      (selectedDate ? toLocalDateStr(selectedDate) : '')
                     }
                     onChange={e =>
                       setScheduleFormData({ ...scheduleFormData, session_date: e.target.value })

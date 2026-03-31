@@ -15,6 +15,14 @@ import supabase from '../../services/supabaseClient';
 import { updateActivitySession } from '../../services/activitySessionsService';
 import { writeAuditLog } from '../../services/activityAuditService';
 
+/** Format a Date as YYYY-MM-DD in local timezone (avoids UTC shift from toISOString) */
+const toLocalDateStr = (d) => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 const MainDashboard = () => {
   const navigate = useNavigate();
   const { user, displayName, careHomeId, isAdmin, isSuperAdmin, isOrgAdmin, isCareHomeManager, organizationId } = useAuth();
@@ -111,7 +119,7 @@ const MainDashboard = () => {
   const refreshActivities = useCallback(async () => {
     try {
       setLoading(true);
-      const today = new Date().toISOString().split('T')[0];
+      const today = toLocalDateStr(new Date());
 
       let query = supabase
         .from('activity_sessions')
