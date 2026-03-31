@@ -94,6 +94,14 @@ const TVDisplayControlPanel = () => {
           .select('id, name')
           .order('name', { ascending: true });
         setCareHomes(data || []);
+        // Auto-select user's care home or first available for non-managers
+        if (!isCareHomeManager && !selectedCareHome) {
+          const defaultId = authCareHomeId || (data && data.length > 0 ? data[0].id : '');
+          if (defaultId) {
+            setSelectedCareHome(defaultId);
+            send({ type: 'setCareHome', careHomeId: defaultId });
+          }
+        }
       } catch { /* ignore */ }
     };
     fetchCareHomes();

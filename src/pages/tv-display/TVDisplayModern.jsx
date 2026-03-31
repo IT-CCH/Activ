@@ -2,6 +2,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import Icon from '../../components/AppIcon';
 import supabase from '../../services/supabaseClient';
+import { useAuth } from '../../context/AuthContext';
 
 /* helpers */
 const formatTime = (t) => {
@@ -328,6 +329,7 @@ const ScheduleItem = ({ session, index, isActive }) => {
 const TV_CHANNEL = 'tv-display-sync';
 
 const TVDisplayModern = () => {
+  const { careHomeId: authCareHomeId } = useAuth();
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -335,7 +337,7 @@ const TVDisplayModern = () => {
   const [now, setNow] = useState(new Date());
   const [slideInterval, setSlideInterval] = useState(12);
   const [paused, setPaused] = useState(false);
-  const [careHomeId, setCareHomeId] = useState(null);
+  const [careHomeId, setCareHomeId] = useState(authCareHomeId || null);
   const [customSlides, setCustomSlides] = useState([]);
   const scheduleRef = useRef(null);
   const channelRef = useRef(null);
@@ -344,6 +346,13 @@ const TVDisplayModern = () => {
   const broadcastRef = useRef(null);
 
   /* activitiesRef is updated via allSlides effect below */
+
+  /* Sync careHomeId from auth when it loads (if not already set by control panel) */
+  useEffect(() => {
+    if (authCareHomeId && !careHomeId) {
+      setCareHomeId(authCareHomeId);
+    }
+  }, [authCareHomeId]);
 
   /* Load custom slides from localStorage on mount */
   useEffect(() => {
