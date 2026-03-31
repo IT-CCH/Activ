@@ -37,8 +37,6 @@ const MainDashboard = () => {
     totalToday: 0,
   });
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [testDate, setTestDate] = useState(null);
-  const [showTestPanel, setShowTestPanel] = useState(false);
   const [realCareHomes, setRealCareHomes] = useState([]);
   const [careHomeLoading, setCareHomeLoading] = useState(true);
 
@@ -64,11 +62,6 @@ const MainDashboard = () => {
     if ((session?.status || '').toLowerCase() === 'cancelled') return 'cancelled';
     if (session?.completed_at) return 'completed';
     return (session?.status || 'scheduled').toLowerCase();
-  };
-
-  // Function to get current date (with test date override)
-  const getCurrentDate = () => {
-    return testDate || new Date();
   };
 
   // Helper function to get time-based greeting
@@ -234,7 +227,7 @@ const MainDashboard = () => {
   const dailyQuote = getDailyQuote();
   
   // Check for holidays and special days
-  const today = getCurrentDate();
+  const today = new Date();
   const todayHolidays = getAllHolidaysForDate(today);
   const holidayInfo = todayHolidays.length > 0 ? todayHolidays[0] : null;
 
@@ -313,7 +306,7 @@ const MainDashboard = () => {
                   </div>
                 )}
                 <h1 className="text-4xl font-bold drop-shadow-lg">
-                  {holidayInfo ? holidayInfo.greetingText : `${getTimeOfDay((testDate || new Date()).getHours())}, ${displayName || 'User'}! 👋`}
+                  {holidayInfo ? holidayInfo.greetingText : `${getTimeOfDay(new Date().getHours())}, ${displayName || 'User'}! 👋`}
                 </h1>
               </div>
               {/* Compact Animated Date Concept */}
@@ -376,7 +369,7 @@ const MainDashboard = () => {
             
             {/* Live Clock */}
             <div className="lg:pr-8 space-y-3">
-              <LiveClock testDate={testDate} />
+              <LiveClock />
               
               {/* Weather Widget */}
               <WeatherWidget />
@@ -935,12 +928,12 @@ const MainDashboard = () => {
           </motion.div>
 
           {/* Calendar Widget Column */}
-          <motion.div
+            <motion.div
             initial={{ opacity: 0, x: 30 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.3, duration: 0.6 }}
           >
-            <ModernCalendar testDate={testDate} careHomeId={selectedDashCareHomeId || careHomeId} />
+            <ModernCalendar careHomeId={selectedDashCareHomeId || careHomeId} />
           </motion.div>
         </div>
       </main>
@@ -1023,63 +1016,7 @@ const MainDashboard = () => {
         )}
       </AnimatePresence>
 
-      {/* Compact Date/Time Testing Panel */}
-      <motion.div 
-        className="fixed bottom-4 right-4 z-50"
-        initial={{ opacity: 0, scale: 0.8, x: 20 }}
-        animate={{ opacity: 1, scale: 1, x: 0 }}
-        transition={{ delay: 0.8, duration: 0.6, type: "spring", stiffness: 300 }}
-      >
-        <div className="bg-white/95 backdrop-blur-sm rounded-lg shadow-lg border border-gray-200 p-3 min-w-64">
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="text-xs font-semibold text-gray-700">🧪 Date Testing</h4>
-            <button
-              onClick={() => setShowTestPanel(!showTestPanel)}
-              className="text-xs text-gray-500 hover:text-gray-700"
-            >
-              {showTestPanel ? '−' : '+'}
-            </button>
-          </div>
-
-          {showTestPanel && (
-            <div className="space-y-2">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  Override Date & Time
-                </label>
-                <input
-                  type="datetime-local"
-                  value={testDate ? testDate.toISOString().slice(0, 16) : ''}
-                  onChange={(e) => {
-                    const date = e.target.value ? new Date(e.target.value) : null;
-                    setTestDate(date);
-                  }}
-                  className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div className="flex gap-1">
-                <button
-                  onClick={() => setTestDate(null)}
-                  className="flex-1 px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs hover:bg-gray-200 transition-colors"
-                >
-                  Reset
-                </button>
-                <button
-                  onClick={() => setTestDate(new Date())}
-                  className="flex-1 px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200 transition-colors"
-                >
-                  Now
-                </button>
-              </div>
-              {testDate && (
-                <p className="text-xs text-gray-500 text-center">
-                  Testing: {testDate.toLocaleString()}
-                </p>
-              )}
-            </div>
-          )}
-        </div>
-      </motion.div>
+      
 
       {/* Fixed TV Display Button */}
       <motion.div 

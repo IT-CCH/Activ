@@ -41,6 +41,12 @@ const ActivityExpenses = () => {
   const [formData, setFormData] = useState(emptyForm);
   const [receiptFile, setReceiptFile] = useState(null);
 
+  // Budget feature
+  const [monthlyBudget, setMonthlyBudget] = useState(null);
+  const [showBudgetModal, setShowBudgetModal] = useState(false);
+  const [budgetInput, setBudgetInput] = useState('');
+  const [budgetSaving, setBudgetSaving] = useState(false);
+
   const categories = ['equipment', 'supplies', 'refreshments', 'transport', 'venue', 'services', 'other'];
   const paymentMethods = [
     { value: 'cash', label: 'Cash' },
@@ -68,6 +74,7 @@ const ActivityExpenses = () => {
     if (selectedCareHomeId) {
       fetchExpenses();
       fetchActivities();
+      fetchBudget();
     }
   }, [selectedCareHomeId]);
 
@@ -83,6 +90,61 @@ const ActivityExpenses = () => {
       }
     } catch (err) {
       console.error('Error fetching care homes:', err);
+    }
+  };
+
+  const fetchBudget = useCallback(async () => {
+    try {
+      const effectiveId = selectedCareHomeId || careHomeId;
+      if (!effectiveId || effectiveId === 'all') {
+        // For 'all' care homes, sum all budgets
+        const { data, error } = await supabase
+          .from('expense_budgets')
+          .select('monthly_budget');
+        if (error) throw error;
+        const total = (data || []).reduce((sum, b) => sum + Number(b.monthly_budget || 0), 0);
+        setMonthlyBudget(total > 0 ? total : null);
+      } else {
+        const { data, error } = await supabase
+          .from('expense_budgets')
+          .select('monthly_budget')
+          .eq('care_home_id', effectiveId)
+          .maybeSingle();
+        if (error) throw error;
+        setMonthlyBudget(data?.monthly_budget ? Number(data.monthly_budget) : null);
+      }
+    } catch (err) {
+      // Table may not exist yet — silently ignore
+      console.warn('Budget fetch skipped:', err.message);
+      setMonthlyBudget(null);
+    }
+  }, [selectedCareHomeId, careHomeId]);
+
+  const saveBudget = async () => {
+    const amount = parseFloat(budgetInput);
+    if (isNaN(amount) || amount < 0) return;
+    setBudgetSaving(true);
+    try {
+      const effectiveId = selectedCareHomeId === 'all' ? null : (selectedCareHomeId || careHomeId);
+      if (!effectiveId) {
+        alert('Please select a specific care home to set a budget.');
+        return;
+      }
+      const { error } = await supabase
+        .from('expense_budgets')
+        .upsert(
+          { care_home_id: effectiveId, monthly_budget: amount, updated_by: user?.id, updated_at: new Date().toISOString() },
+          { onConflict: 'care_home_id' }
+        );
+      if (error) throw error;
+      setMonthlyBudget(amount);
+      setShowBudgetModal(false);
+      setBudgetInput('');
+    } catch (err) {
+      console.error('Error saving budget:', err);
+      alert('Failed to save budget. Make sure the expense_budgets table exists — see the SQL migration file.');
+    } finally {
+      setBudgetSaving(false);
     }
   };
 
@@ -404,15 +466,31 @@ const ActivityExpenses = () => {
             </h1>
             <p className="text-gray-600 mt-2 text-lg">Track and manage activity-related expenses</p>
           </div>
-          <motion.button
-            onClick={() => (showForm ? setShowForm(false) : openNewForm())}
-            className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all"
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-          >
-            <Icon name={showForm ? 'X' : 'Plus'} size={20} />
-            {showForm ? 'Cancel' : 'Log Expense'}
-          </motion.button>
+          <div className="flex items-center gap-3">
+            {(canViewAllHomes || isCareHomeManager) && selectedCareHomeId !== 'all' && (
+              <motion.button
+                onClick={() => {
+                  setBudgetInput(monthlyBudget?.toString() || '');
+                  setShowBudgetModal(true);
+                }}
+                className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <Icon name="Target" size={20} />
+                Set Budget
+              </motion.button>
+            )}
+            <motion.button
+              onClick={() => (showForm ? setShowForm(false) : openNewForm())}
+              className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <Icon name={showForm ? 'X' : 'Plus'} size={20} />
+              {showForm ? 'Cancel' : 'Log Expense'}
+            </motion.button>
+          </div>
         </motion.div>
 
         {/* Care Home Selector */}
@@ -500,6 +578,55 @@ const ActivityExpenses = () => {
             </div>
           </div>
         </motion.div>
+
+        {/* Budget Progress Bar */}
+        {monthlyBudget != null && monthlyBudget > 0 && (
+          <motion.div
+            className="bg-white/80 backdrop-blur-sm rounded-xl p-5 shadow-sm border border-white/50 mb-8"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+          >
+            {(() => {
+              const budgetUsedPct = Math.min((thisMonthTotal / monthlyBudget) * 100, 100);
+              const remaining = monthlyBudget - thisMonthTotal;
+              const isOverBudget = remaining < 0;
+              const barColor = budgetUsedPct >= 90 ? 'from-red-500 to-rose-500' : budgetUsedPct >= 75 ? 'from-amber-400 to-orange-500' : 'from-emerald-400 to-green-500';
+              const textColor = budgetUsedPct >= 90 ? 'text-red-600' : budgetUsedPct >= 75 ? 'text-amber-600' : 'text-emerald-600';
+              return (
+                <>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Icon name="Target" size={20} className="text-emerald-600" />
+                      <span className="font-semibold text-gray-700">Monthly Budget</span>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <span className="text-sm text-gray-500">
+                        {`\u00a3${thisMonthTotal.toFixed(2)} of \u00a3${monthlyBudget.toFixed(2)}`}
+                      </span>
+                      <span className={`text-sm font-bold ${textColor}`}>
+                        {isOverBudget ? `\u00a3${Math.abs(remaining).toFixed(2)} over budget` : `\u00a3${remaining.toFixed(2)} remaining`}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="h-4 bg-gray-200 rounded-full overflow-hidden">
+                    <motion.div
+                      className={`h-full bg-gradient-to-r ${barColor} rounded-full`}
+                      initial={{ width: 0 }}
+                      animate={{ width: `${budgetUsedPct}%` }}
+                      transition={{ duration: 0.8, ease: 'easeOut' }}
+                    />
+                  </div>
+                  <div className="flex justify-between mt-2 text-xs text-gray-400">
+                    <span>0%</span>
+                    <span>{`${Math.round(budgetUsedPct)}% used`}</span>
+                    <span>100%</span>
+                  </div>
+                </>
+              );
+            })()}
+          </motion.div>
+        )}
 
         {/* Add / Edit Expense Form */}
         <AnimatePresence>
@@ -1023,6 +1150,84 @@ const ActivityExpenses = () => {
                   <Icon name="Trash2" size={16} />
                   Delete
                 </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Budget Modal */}
+      <AnimatePresence>
+        {showBudgetModal && (
+          <motion.div
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setShowBudgetModal(false)}
+          >
+            <motion.div
+              className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden"
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="bg-gradient-to-r from-emerald-500 to-teal-600 p-6 text-white">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Icon name="Target" size={24} />
+                    <h2 className="text-xl font-bold">Set Monthly Budget</h2>
+                  </div>
+                  <button
+                    onClick={() => setShowBudgetModal(false)}
+                    className="p-2 bg-white/20 hover:bg-white/30 rounded-full transition-colors"
+                  >
+                    <Icon name="X" size={20} />
+                  </button>
+                </div>
+                <p className="text-emerald-100 text-sm mt-2">
+                  {careHomes.find(h => h.id === selectedCareHomeId)?.name || 'Selected Care Home'}
+                </p>
+              </div>
+              <div className="p-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Monthly Budget Amount (\u00a3)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={budgetInput}
+                  onChange={(e) => setBudgetInput(e.target.value)}
+                  placeholder="e.g. 500.00"
+                  className="w-full px-4 py-3 text-gray-800 placeholder-gray-400 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-lg"
+                  autoFocus
+                />
+                {monthlyBudget != null && (
+                  <p className="text-sm text-gray-500 mt-2">
+                    Current budget: \u00a3{monthlyBudget.toFixed(2)}
+                  </p>
+                )}
+                <div className="flex gap-3 mt-6">
+                  <button
+                    onClick={saveBudget}
+                    disabled={budgetSaving || !budgetInput}
+                    className="flex-1 px-5 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-semibold rounded-xl shadow-md transition-all disabled:opacity-60 flex items-center justify-center gap-2"
+                  >
+                    {budgetSaving ? (
+                      <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> Saving...</>
+                    ) : (
+                      <><Icon name="Check" size={18} /> Save Budget</>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setShowBudgetModal(false)}
+                    className="px-5 py-3 bg-gray-100 text-gray-700 font-medium rounded-xl hover:bg-gray-200 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
             </motion.div>
           </motion.div>

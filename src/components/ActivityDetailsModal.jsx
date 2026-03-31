@@ -68,8 +68,18 @@ const ActivityDetailsModal = ({ isOpen, activity: session, onClose, onMarkComple
       // ignore JSON parse errors and use split parsing below
     }
 
+    // Handle HTML content (e.g. from rich text editor)
+    if (/<li[^>]*>/i.test(trimmed)) {
+      const items = [];
+      trimmed.replace(/<li[^>]*>(.*?)<\/li>/gi, (_, inner) => {
+        const text = inner.replace(/<[^>]*>/g, '').trim();
+        if (text) items.push(text);
+      });
+      if (items.length) return items;
+    }
+
     return trimmed
-      .split(/\r?\n|,|;/)
+      .split(/\r?\n/)
       .map((part) => part.replace(/^[-•\d.)\s]+/, '').trim())
       .filter(Boolean);
   };

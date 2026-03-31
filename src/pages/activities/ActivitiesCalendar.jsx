@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Icon from '../../components/AppIcon';
 import Header from '../../components/navigation/Header';
@@ -6,6 +6,9 @@ import { useAuth } from '../../context/AuthContext';
 import supabase from '../../services/supabaseClient';
 import { writeAuditLog } from '../../services/activityAuditService';
 import ActivityMediaUploader from '../../components/activities/ActivityMediaUploader';
+import BulletTextarea from '../../components/activities/BulletTextarea';
+import RichTextEditor from '../../components/activities/RichTextEditor';
+import sanitizeHtml from '../../utils/sanitizeHtml';
 import Swal from 'sweetalert2';
 
 const ActivitiesCalendar = () => {
@@ -20,9 +23,9 @@ const ActivitiesCalendar = () => {
   const [supportsImageUrlColumn, setSupportsImageUrlColumn] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [selectedScope, setSelectedScope] = useState('all');
   const [mediaItems, setMediaItems] = useState([]);
   const [showNewCategoryForm, setShowNewCategoryForm] = useState(false);
+  const mouseDownOnBackdrop = useRef(false);
   const [newCategoryData, setNewCategoryData] = useState({ name: '', description: '' });
   const [adminCareHomes, setAdminCareHomes] = useState([]);
   const [selectedCareHomeForActivity, setSelectedCareHomeForActivity] = useState('');
@@ -38,7 +41,6 @@ const ActivitiesCalendar = () => {
     instructions: '',
     benefits: '',
     image_url: '',
-    share_globally: false,
     status: 'active'
   });
 
@@ -124,12 +126,6 @@ const ActivitiesCalendar = () => {
           )
         `)
         .order('created_at', { ascending: false });
-
-      if (careHomeId) {
-        query = query.or(`care_home_id.is.null,care_home_id.eq.${careHomeId}`);
-      } else {
-        query = query.is('care_home_id', null);
-      }
 
       const { data, error } = await query;
 
@@ -261,7 +257,6 @@ const ActivitiesCalendar = () => {
       instructions: '',
       benefits: '',
       image_url: '',
-      share_globally: false,
       status: 'active'
     });
     setMediaItems([]);
@@ -294,7 +289,6 @@ const ActivitiesCalendar = () => {
       instructions: showActivityDetail.instructions || '',
       benefits: showActivityDetail.benefits || '',
       image_url: showActivityDetail.image_url || '',
-      share_globally: !showActivityDetail.care_home_id,
       status: showActivityDetail.status || 'active'
     });
     setSelectedCareHomeForActivity(showActivityDetail.care_home_id || '');
@@ -310,7 +304,7 @@ const ActivitiesCalendar = () => {
     setThumbnailUploading(true);
     try {
       let care_home_id = selectedCareHomeForActivity || user?.care_home_id || careHomeId;
-      if (!care_home_id && !(isSuperAdmin && formData.share_globally)) {
+      if (!care_home_id) {
         const { data: careHomes, error: chError } = await supabase
           .from('care_homes')
           .select('id')
@@ -321,7 +315,7 @@ const ActivitiesCalendar = () => {
         }
       }
 
-      if (!care_home_id && !formData.share_globally) {
+      if (!care_home_id) {
         await Swal.fire({
           icon: 'error',
           title: 'Care home not found',
@@ -332,7 +326,7 @@ const ActivitiesCalendar = () => {
 
       const fileExt = file.name.split('.').pop();
       const fileName = `${Date.now()}_${Math.random().toString(36).slice(2, 9)}.${fileExt}`;
-      const storageScope = care_home_id || 'global';
+      const storageScope = care_home_id || 'shared';
       const filePath = `${storageScope}/thumbnail/${fileName}`;
 
       const { error: uploadError } = await supabase.storage
@@ -401,27 +395,15 @@ const ActivitiesCalendar = () => {
       }
 
       const resolvedCareHomeId = isSuperAdmin
-        ? (formData.share_globally ? null : (selectedCareHomeForActivity || care_home_id || null))
+        ? (selectedCareHomeForActivity || care_home_id || null)
         : (care_home_id || null);
-
-      if (!formData.share_globally && !resolvedCareHomeId) {
-        await Swal.fire({
-          icon: 'warning',
-          title: 'Select a care home',
-          text: 'Please select a care home for this activity.'
-        });
-        return;
-      }
 
       const payload = {
         ...formData,
-        share_globally: isSuperAdmin ? formData.share_globally : false,
-        care_home_id: isSuperAdmin ? resolvedCareHomeId : care_home_id,
+        care_home_id: resolvedCareHomeId,
         max_participants: formData.max_participants ? parseInt(formData.max_participants) : null,
         duration_minutes: formData.duration_minutes ? parseInt(formData.duration_minutes) : 60,
       };
-
-      delete payload.share_globally;
 
       if (!supportsImageUrlColumn) {
         delete payload.image_url;
@@ -618,12 +600,8 @@ const ActivitiesCalendar = () => {
     const matchesSearch = activity.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          (activity.description || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = selectedCategory === 'all' || activity.category_id === selectedCategory;
-    const isGlobal = activity.care_home_id == null;
-    const matchesScope = selectedScope === 'all'
-      || (selectedScope === 'global' && isGlobal)
-      || (selectedScope === 'carehome' && !isGlobal);
 
-    return matchesSearch && matchesCategory && matchesScope;
+    return matchesSearch && matchesCategory;
   });
 
   const getMediaLink = (item) => {
@@ -725,15 +703,6 @@ const ActivitiesCalendar = () => {
                     <option key={cat.id} value={cat.id}>{cat.name}</option>
                   ))}
                 </select>
-                <select
-                  value={selectedScope}
-                  onChange={(e) => setSelectedScope(e.target.value)}
-                  className="px-4 py-4 border-2 border-indigo-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition shadow-sm font-medium"
-                >
-                  <option value="all">All Activities</option>
-                  <option value="global">Global Activities</option>
-                  <option value="carehome">Care Home Activities</option>
-                </select>
               </div>
             </motion.div>
 
@@ -825,16 +794,20 @@ const ActivitiesCalendar = () => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto"
-            onClick={() => {
-              setShowAddModal(false);
-              resetActivityForm();
+            onMouseDown={(e) => { if (e.target === e.currentTarget) mouseDownOnBackdrop.current = true; }}
+            onMouseUp={(e) => {
+              if (e.target === e.currentTarget && mouseDownOnBackdrop.current) {
+                setShowAddModal(false);
+                resetActivityForm();
+              }
+              mouseDownOnBackdrop.current = false;
             }}
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              onClick={(e) => e.stopPropagation()}
+              onMouseDown={(e) => { mouseDownOnBackdrop.current = false; }}
               className="bg-white rounded-3xl shadow-2xl max-w-3xl w-full my-8"
             >
               <div className="p-6 border-b border-gray-200 flex items-center justify-between bg-gradient-to-r from-indigo-50 to-purple-50">
@@ -951,12 +924,12 @@ const ActivitiesCalendar = () => {
                       <Icon name="Target" size={16} className="text-indigo-600" />
                       Objective
                     </label>
-                    <textarea
+                    <BulletTextarea
                       value={formData.objective}
-                      onChange={(e) => setFormData({...formData, objective: e.target.value})}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                      onChange={(val) => setFormData({...formData, objective: val})}
+                      mode="bullet"
                       placeholder="What are the goals of this activity?"
-                      rows={2}
+                      rows={3}
                     />
                   </div>
                   <div className="md:col-span-2">
@@ -964,10 +937,10 @@ const ActivitiesCalendar = () => {
                       <Icon name="ListChecks" size={16} className="text-indigo-600" />
                       Instructions
                     </label>
-                    <textarea
+                    <BulletTextarea
                       value={formData.instructions}
-                      onChange={(e) => setFormData({...formData, instructions: e.target.value})}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                      onChange={(val) => setFormData({...formData, instructions: val})}
+                      mode="number"
                       placeholder="Step-by-step instructions on how to conduct the activity"
                       rows={4}
                     />
@@ -977,12 +950,12 @@ const ActivitiesCalendar = () => {
                       <Icon name="Package" size={16} className="text-indigo-600" />
                       Materials Needed
                     </label>
-                    <textarea
+                    <BulletTextarea
                       value={formData.materials_needed}
-                      onChange={(e) => setFormData({...formData, materials_needed: e.target.value})}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                      onChange={(val) => setFormData({...formData, materials_needed: val})}
+                      mode="number"
                       placeholder="List of materials required"
-                      rows={2}
+                      rows={3}
                     />
                   </div>
                   <div className="md:col-span-2">
@@ -990,12 +963,11 @@ const ActivitiesCalendar = () => {
                       <Icon name="Heart" size={16} className="text-indigo-600" />
                       Benefits
                     </label>
-                    <textarea
+                    <RichTextEditor
                       value={formData.benefits}
-                      onChange={(e) => setFormData({...formData, benefits: e.target.value})}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                      onChange={(val) => setFormData({...formData, benefits: val})}
                       placeholder="Benefits for residents"
-                      rows={2}
+                      minHeight="80px"
                     />
                   </div>
                   <div>
@@ -1097,44 +1069,6 @@ const ActivitiesCalendar = () => {
                   />
                 </div>
 
-                {isSuperAdmin ? (
-                  <div className="border-t-2 border-gray-100 pt-5 mt-5 space-y-4">
-                    <label className="flex items-start gap-3 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={Boolean(formData.share_globally)}
-                        onChange={(e) => setFormData({ ...formData, share_globally: e.target.checked })}
-                        className="mt-1 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                      />
-                      <div>
-                        <p className="text-sm font-bold text-gray-800 flex items-center gap-2">
-                          <Icon name="Globe" size={16} className="text-emerald-600" />
-                          Global Activity (all care homes)
-                        </p>
-                        <p className="text-xs text-gray-500 mt-1">
-                          Super Admin only: make this activity available to everyone.
-                        </p>
-                      </div>
-                    </label>
-
-                    {!formData.share_globally && (
-                      <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-2">Care Home Scope *</label>
-                        <select
-                          value={selectedCareHomeForActivity}
-                          onChange={(e) => setSelectedCareHomeForActivity(e.target.value)}
-                          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
-                          required={!formData.share_globally}
-                        >
-                          <option value="">Select care home</option>
-                          {adminCareHomes.map(home => (
-                            <option key={home.id} value={home.id}>{home.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-                  </div>
-                ) : null}
                 
                 <div className="flex gap-3 pt-6 border-t border-gray-200 mt-6">
                   <motion.button
@@ -1173,13 +1107,19 @@ const ActivitiesCalendar = () => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto"
-            onClick={() => setShowActivityDetail(null)}
+            onMouseDown={(e) => { if (e.target === e.currentTarget) mouseDownOnBackdrop.current = true; }}
+            onMouseUp={(e) => {
+              if (e.target === e.currentTarget && mouseDownOnBackdrop.current) {
+                setShowActivityDetail(null);
+              }
+              mouseDownOnBackdrop.current = false;
+            }}
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              onClick={(e) => e.stopPropagation()}
+              onMouseDown={(e) => { mouseDownOnBackdrop.current = false; }}
               className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full my-8 overflow-hidden"
             >
               {/* Modal Header with Image */}
@@ -1237,7 +1177,16 @@ const ActivitiesCalendar = () => {
                         <Icon name="ListChecks" size={20} className="text-indigo-600" />
                         How to Conduct
                       </h3>
-                      <p className="text-gray-600 whitespace-pre-line leading-relaxed">{showActivityDetail.instructions}</p>
+                      <div className="space-y-2">
+                        {showActivityDetail.instructions.split(/\r?\n/).filter(l => l.trim()).map((line, i) => (
+                          <div key={i} className="flex gap-2.5 text-sm text-gray-600">
+                            <span className="w-5 h-5 rounded-full bg-indigo-600 text-white text-xs font-semibold flex items-center justify-center flex-shrink-0 mt-0.5">
+                              {i + 1}
+                            </span>
+                            <p className="leading-relaxed">{line.replace(/^\d+\.\s*/, '').trim()}</p>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                   {showActivityDetail.materials_needed && (
@@ -1246,7 +1195,13 @@ const ActivitiesCalendar = () => {
                         <Icon name="Package" size={20} className="text-indigo-600" />
                         Materials Needed
                       </h3>
-                      <p className="text-gray-600 leading-relaxed">{showActivityDetail.materials_needed}</p>
+                      <div className="space-y-1.5">
+                        {showActivityDetail.materials_needed.split(/\r?\n/).filter(l => l.trim()).map((line, i) => (
+                          <div key={i} className="text-sm text-gray-600 bg-gray-50 px-2.5 py-1.5 rounded-lg border border-gray-100">
+                            {line.replace(/^\d+\.\s*/, '').trim()}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                   {showActivityDetail.benefits && (
@@ -1255,7 +1210,7 @@ const ActivitiesCalendar = () => {
                         <Icon name="Heart" size={20} className="text-indigo-600" />
                         Benefits
                       </h3>
-                      <p className="text-gray-600 leading-relaxed">{showActivityDetail.benefits}</p>
+                      <div className="text-gray-600 leading-relaxed prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHtml(showActivityDetail.benefits) }} />
                     </div>
                   )}
 

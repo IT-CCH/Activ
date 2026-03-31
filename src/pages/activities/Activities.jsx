@@ -6,6 +6,8 @@ import supabase from '../../services/supabaseClient';
 import { writeAuditLog } from '../../services/activityAuditService';
 import ActivityMediaUploader from '../../components/activities/ActivityMediaUploader';
 import ActivityMediaViewer from '../../components/activities/ActivityMediaViewer';
+import BulletTextarea from '../../components/activities/BulletTextarea';
+import RichTextEditor from '../../components/activities/RichTextEditor';
 
 const Activities = () => {
   const navigate = useNavigate();
@@ -22,6 +24,9 @@ const Activities = () => {
     name: '',
     description: '',
     objective: '',
+    instructions: '',
+    materials_needed: '',
+    benefits: '',
     duration_minutes: 60,
     max_participants: '',
     location: '',
@@ -57,7 +62,6 @@ const Activities = () => {
           activity_categories(name, color_code),
           activity_media(id, media_type, title, tagline, thumbnail_url, external_url, youtube_video_id, is_primary)
         `)
-        .eq('care_home_id', careHomeId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -121,6 +125,9 @@ const Activities = () => {
         name: '',
         description: '',
         objective: '',
+        instructions: '',
+        materials_needed: '',
+        benefits: '',
         duration_minutes: 60,
         max_participants: '',
         location: '',
@@ -249,12 +256,45 @@ const Activities = () => {
               </div>
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium mb-2">Objective</label>
-                <textarea
+                <p className="text-xs text-gray-400 mb-1">Each line is automatically bulleted. Press Enter for a new point.</p>
+                <BulletTextarea
                   value={formData.objective}
-                  onChange={(e) => setFormData({...formData, objective: e.target.value})}
-                  className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                  placeholder="What residents will achieve"
-                  rows={2}
+                  onChange={(val) => setFormData({...formData, objective: val})}
+                  mode="bullet"
+                  placeholder="• What residents will achieve"
+                  rows={3}
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium mb-2">Instructions</label>
+                <p className="text-xs text-gray-400 mb-1">Steps are automatically numbered. Press Enter for the next step.</p>
+                <BulletTextarea
+                  value={formData.instructions}
+                  onChange={(val) => setFormData({...formData, instructions: val})}
+                  mode="number"
+                  placeholder="1. First step of the activity"
+                  rows={4}
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium mb-2">Materials Needed</label>
+                <p className="text-xs text-gray-400 mb-1">Items are automatically numbered. Press Enter to add another.</p>
+                <BulletTextarea
+                  value={formData.materials_needed}
+                  onChange={(val) => setFormData({...formData, materials_needed: val})}
+                  mode="number"
+                  placeholder="1. Paint brushes"
+                  rows={3}
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium mb-2">Benefits</label>
+                <p className="text-xs text-gray-400 mb-1">Use the toolbar for bold, italic, bullets, or numbered lists.</p>
+                <RichTextEditor
+                  value={formData.benefits}
+                  onChange={(val) => setFormData({...formData, benefits: val})}
+                  placeholder="Describe the benefits of this activity..."
+                  minHeight="100px"
                 />
               </div>
               <div>

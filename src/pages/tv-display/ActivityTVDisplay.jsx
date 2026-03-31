@@ -18,7 +18,16 @@ const parseList = (value) => {
   const s = String(value).trim();
   if (!s) return [];
   try { const p = JSON.parse(s); if (Array.isArray(p)) return p.filter(Boolean).map(String); } catch {}
-  return s.split(/\r?\n|,|;/).map((x) => x.replace(/^[-•\d.)\s]+/, '').trim()).filter(Boolean);
+  // Handle HTML content (e.g. from rich text editor)
+  if (/<li[^>]*>/i.test(s)) {
+    const items = [];
+    s.replace(/<li[^>]*>(.*?)<\/li>/gi, (_, inner) => {
+      const text = inner.replace(/<[^>]*>/g, '').trim();
+      if (text) items.push(text);
+    });
+    if (items.length) return items;
+  }
+  return s.split(/\r?\n/).map((x) => x.replace(/^[-•\d.)\s]+/, '').trim()).filter(Boolean);
 };
 
 const getMediaLink = (media) => {

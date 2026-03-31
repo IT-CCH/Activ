@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Header from '../../components/navigation/Header';
 import Icon from '../../components/AppIcon';
 import supabase from '../../services/supabaseClient';
+import { useAuth } from '../../context/AuthContext';
 
 const TV_CHANNEL = 'tv-display-sync';
 
@@ -22,10 +23,11 @@ const getStatusStyle = (status) => {
 };
 
 const TVDisplayControlPanel = () => {
+  const { isCareHomeManager, careHomeId: authCareHomeId } = useAuth();
   const [connected, setConnected] = useState(false);
   const [tvStatus, setTvStatus] = useState(null);
   const [careHomes, setCareHomes] = useState([]);
-  const [selectedCareHome, setSelectedCareHome] = useState('');
+  const [selectedCareHome, setSelectedCareHome] = useState(isCareHomeManager ? (authCareHomeId || '') : '');
   const [slideInterval, setSlideInterval] = useState(12);
   const [localActivities, setLocalActivities] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -78,6 +80,11 @@ const TVDisplayControlPanel = () => {
     return () => clearTimeout(timer);
   }, [tvStatus]);
 
+  /* Send commands to TV Display */
+  const send = useCallback((msg) => {
+    try { channelRef.current?.postMessage(msg); } catch { /* ignore */ }
+  }, []);
+
   /* Fetch care homes for filter */
   useEffect(() => {
     const fetchCareHomes = async () => {
@@ -91,6 +98,14 @@ const TVDisplayControlPanel = () => {
     };
     fetchCareHomes();
   }, []);
+
+  /* Lock care home managers to their own care home */
+  useEffect(() => {
+    if (isCareHomeManager && authCareHomeId) {
+      setSelectedCareHome(authCareHomeId);
+      send({ type: 'setCareHome', careHomeId: authCareHomeId });
+    }
+  }, [isCareHomeManager, authCareHomeId, send]);
 
   /* Fetch activities locally for display in control panel */
   const fetchActivities = useCallback(async () => {
@@ -128,11 +143,6 @@ const TVDisplayControlPanel = () => {
     const id = setInterval(fetchActivities, 120000);
     return () => clearInterval(id);
   }, [fetchActivities]);
-
-  /* Send commands to TV Display */
-  const send = useCallback((msg) => {
-    try { channelRef.current?.postMessage(msg); } catch { /* ignore */ }
-  }, []);
 
   const goToSlide = (index) => send({ type: 'navigate', slide: index });
   const nextSlide = () => send({ type: 'next' });
@@ -358,20 +368,25 @@ const TVDisplayControlPanel = () => {
               <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">
                 <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider mb-3 flex items-center gap-2">
                   <Icon name="Building2" size={16} className="text-violet-500" />
-                  Care Home Filter
+                  Care Home
                 </h3>
-                <select
-                  value={selectedCareHome}
-                  onChange={(e) => updateCareHome(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm font-medium text-gray-700 bg-white focus:ring-2 focus:ring-violet-500 focus:border-violet-500 transition-all"
-                >
-                  <option value="">All Care Homes</option>
-                  {careHomes.map((ch) => (
-                    <option key={ch.id} value={ch.id}>
-                      {ch.name}
-                    </option>
-                  ))}
-                </select>
+                {isCareHomeManager ? (
+                  <p className="text-sm font-medium text-gray-700 px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl">
+                    {careHomes.find((ch) => ch.id === authCareHomeId)?.name || 'My Care Home'}
+                  </p>
+                ) : (
+                  <select
+                    value={selectedCareHome}
+                    onChange={(e) => updateCareHome(e.target.value)}
+                    className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm font-medium text-gray-700 bg-white focus:ring-2 focus:ring-violet-500 focus:border-violet-500 transition-all"
+                  >
+                    {careHomes.map((ch) => (
+                      <option key={ch.id} value={ch.id}>
+                        {ch.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
             )}
 

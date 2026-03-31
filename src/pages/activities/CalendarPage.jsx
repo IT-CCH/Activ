@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Icon from '../../components/AppIcon';
 import Header from '../../components/navigation/Header';
 import { useAuth } from '../../context/AuthContext';
 import supabase from '../../services/supabaseClient';
+import sanitizeHtml from '../../utils/sanitizeHtml';
 import { writeAuditLog } from '../../services/activityAuditService';
 
 /** Format a Date as YYYY-MM-DD in local timezone (avoids UTC shift from toISOString) */
@@ -16,6 +17,7 @@ const toLocalDateStr = (d) => {
 
 const CalendarPage = () => {
   const { user, careHomeId, isAdmin, isSuperAdmin, isOrgAdmin, isCareHomeManager, organizationId } = useAuth();
+  const mouseDownOnBackdrop = useRef(false);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [scheduledActivities, setScheduledActivities] = useState([]);
@@ -111,13 +113,6 @@ const CalendarPage = () => {
         `)
         .order('created_at', { ascending: false });
 
-      const effectiveId = selectedCareHomeId || careHomeId;
-      if (effectiveId) {
-        query = query.or(`care_home_id.is.null,care_home_id.eq.${effectiveId}`);
-      } else {
-        query = query.is('care_home_id', null);
-      }
-
       const { data, error } = await query;
       if (error) throw error;
       setAllActivities(data || []);
@@ -147,7 +142,7 @@ const CalendarPage = () => {
 
       const effectiveId = selectedCareHomeId || careHomeId;
       if (effectiveId) {
-        query = query.or(`care_home_id.eq.${effectiveId},care_home_id.is.null`);
+        query = query.eq('care_home_id', effectiveId);
       }
 
       const { data, error } = await query;
@@ -185,7 +180,7 @@ const CalendarPage = () => {
 
       const effectiveId = selectedCareHomeId || careHomeId;
       if (effectiveId) {
-        query = query.or(`care_home_id.eq.${effectiveId},care_home_id.is.null`);
+        query = query.eq('care_home_id', effectiveId);
       }
 
       const { data, error } = await query;
@@ -621,13 +616,17 @@ const CalendarPage = () => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto"
-            onClick={() => setShowActivityDetail(null)}
+            onMouseDown={(e) => { if (e.target === e.currentTarget) mouseDownOnBackdrop.current = true; }}
+            onMouseUp={(e) => {
+              if (e.target === e.currentTarget && mouseDownOnBackdrop.current) setShowActivityDetail(null);
+              mouseDownOnBackdrop.current = false;
+            }}
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              onClick={e => e.stopPropagation()}
+              onMouseDown={() => { mouseDownOnBackdrop.current = false; }}
               className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full my-8 overflow-hidden"
             >
               {/* Modal Header with Image */}
@@ -691,9 +690,16 @@ const CalendarPage = () => {
                         <Icon name="ListChecks" size={20} className="text-indigo-600" />
                         How to Conduct
                       </h3>
-                      <p className="text-gray-600 whitespace-pre-line leading-relaxed">
-                        {showActivityDetail.instructions}
-                      </p>
+                      <div className="space-y-2">
+                        {showActivityDetail.instructions.split(/\r?\n/).filter(l => l.trim()).map((line, i) => (
+                          <div key={i} className="flex gap-2.5 text-sm text-gray-600">
+                            <span className="w-5 h-5 rounded-full bg-indigo-600 text-white text-xs font-semibold flex items-center justify-center flex-shrink-0 mt-0.5">
+                              {i + 1}
+                            </span>
+                            <p className="leading-relaxed">{line.replace(/^\d+\.\s*/, '').trim()}</p>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                   {showActivityDetail.materials_needed && (
@@ -702,7 +708,13 @@ const CalendarPage = () => {
                         <Icon name="Package" size={20} className="text-indigo-600" />
                         Materials Needed
                       </h3>
-                      <p className="text-gray-600 leading-relaxed">{showActivityDetail.materials_needed}</p>
+                      <div className="space-y-1.5">
+                        {showActivityDetail.materials_needed.split(/\r?\n/).filter(l => l.trim()).map((line, i) => (
+                          <div key={i} className="text-sm text-gray-600 bg-gray-50 px-2.5 py-1.5 rounded-lg border border-gray-100">
+                            {line.replace(/^\d+\.\s*/, '').trim()}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                   {showActivityDetail.benefits && (
@@ -711,7 +723,7 @@ const CalendarPage = () => {
                         <Icon name="Heart" size={20} className="text-indigo-600" />
                         Benefits
                       </h3>
-                      <p className="text-gray-600 leading-relaxed">{showActivityDetail.benefits}</p>
+                      <div className="text-gray-600 leading-relaxed prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHtml(showActivityDetail.benefits) }} />
                     </div>
                   )}
 
@@ -770,13 +782,17 @@ const CalendarPage = () => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-            onClick={() => setShowScheduleModal(false)}
+            onMouseDown={(e) => { if (e.target === e.currentTarget) mouseDownOnBackdrop.current = true; }}
+            onMouseUp={(e) => {
+              if (e.target === e.currentTarget && mouseDownOnBackdrop.current) setShowScheduleModal(false);
+              mouseDownOnBackdrop.current = false;
+            }}
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              onClick={e => e.stopPropagation()}
+              onMouseDown={() => { mouseDownOnBackdrop.current = false; }}
               className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full"
             >
               <div className="p-6 border-b border-gray-200 flex items-center justify-between bg-gradient-to-r from-indigo-50 to-purple-50">
