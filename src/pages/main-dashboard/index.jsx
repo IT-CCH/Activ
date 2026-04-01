@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import Header from '../../components/navigation/Header';
@@ -57,6 +57,20 @@ const MainDashboard = () => {
   const [editingSessionId, setEditingSessionId] = useState(null);
   const [editForm, setEditForm] = useState({ status: '', participants_engaged: '', participants_not_engaged: '', notes: '', location: '' });
   const [editSaving, setEditSaving] = useState(false);
+
+  // Schedule modal state
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [allActivitiesList, setAllActivitiesList] = useState([]);
+  const [scheduleSearch, setScheduleSearch] = useState('');
+  const [scheduleDropdownOpen, setScheduleDropdownOpen] = useState(false);
+  const scheduleSearchRef = useRef(null);
+  const [scheduleForm, setScheduleForm] = useState({
+    activity_id: '',
+    start_time: '',
+    end_time: '',
+    location: '',
+    notes: '',
+  });
 
   const getEffectiveStatus = (session) => {
     if ((session?.status || '').toLowerCase() === 'cancelled') return 'cancelled';
@@ -180,6 +194,71 @@ const MainDashboard = () => {
   useEffect(() => {
     refreshActivities();
   }, [refreshActivities]);
+
+  // Fetch all activities for schedule modal
+  useEffect(() => {
+    const fetchAllActivities = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('activities')
+          .select('id, name, description, image_url, duration_minutes, location, status, activity_categories(name, color_code)')
+          .eq('status', 'active')
+          .order('name');
+        if (error) throw error;
+        setAllActivitiesList(data || []);
+      } catch (err) {
+        console.error('Error fetching activities list:', err);
+      }
+    };
+    fetchAllActivities();
+  }, []);
+
+  const addOneHour = (time) => {
+    if (!time) return '';
+    const [h, m] = time.split(':').map(Number);
+    if (isNaN(h) || isNaN(m)) return '';
+    const nh = (h + 1) % 24;
+    return `${String(nh).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  };
+
+  const handleScheduleSubmit = async (e) => {
+    e.preventDefault();
+    if (!scheduleForm.activity_id || !scheduleForm.start_time) return;
+    try {
+      const selectedAct = allActivitiesList.find(a => a.id === scheduleForm.activity_id);
+      const effectiveCareHomeId = selectedDashCareHomeId || careHomeId;
+      if (!effectiveCareHomeId) {
+        alert('No care home selected.');
+        return;
+      }
+      const endTime = scheduleForm.end_time || addOneHour(scheduleForm.start_time);
+      const { data: inserted, error } = await supabase
+        .from('activity_sessions')
+        .insert([{
+          activity_id: scheduleForm.activity_id,
+          care_home_id: effectiveCareHomeId,
+          session_date: toLocalDateStr(new Date()),
+          start_time: scheduleForm.start_time,
+          end_time: endTime,
+          location: scheduleForm.location || selectedAct?.location || '',
+          status: 'scheduled',
+          notes: scheduleForm.notes || '',
+        }])
+        .select()
+        .single();
+      if (error) throw error;
+      if (inserted?.id) {
+        writeAuditLog({ tableName: 'activity_sessions', recordId: inserted.id, action: 'INSERT', newValues: inserted });
+      }
+      setScheduleForm({ activity_id: '', start_time: '', end_time: '', location: '', notes: '' });
+      setScheduleSearch('');
+      setShowScheduleModal(false);
+      await refreshActivities();
+    } catch (err) {
+      console.error('Error scheduling activity:', err);
+      alert('Failed to schedule: ' + err.message);
+    }
+  };
 
   const getTimeString = (time) => {
     if (!time) return '';
@@ -429,7 +508,7 @@ const MainDashboard = () => {
                     </div>
                   </div>
                   <button
-                    onClick={() => navigate('/calendar')}
+                    onClick={() => setShowScheduleModal(true)}
                     className="group flex items-center gap-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 transition-all duration-300 hover:-translate-y-0.5"
                   >
                     <Icon name="Plus" size={15} className="group-hover:rotate-90 transition-transform duration-300" />
@@ -492,7 +571,7 @@ const MainDashboard = () => {
                     <p className="text-sm font-semibold text-slate-500">No activities today</p>
                     <p className="text-xs text-slate-400">Schedule one to get started</p>
                     <button
-                      onClick={() => navigate('/calendar')}
+                      onClick={() => setShowScheduleModal(true)}
                       className="mt-2 flex items-center gap-1.5 text-sm font-semibold text-violet-600 hover:text-violet-700 transition-colors"
                     >
                       <Icon name="Plus" size={14} />
@@ -1013,6 +1092,147 @@ const MainDashboard = () => {
               setIsModalOpen(false);
             }}
           />
+        )}
+      </AnimatePresence>
+
+      {/* Schedule Activity Modal */}
+      <AnimatePresence>
+        {showScheduleModal && (
+          <motion.div
+            key="schedule-modal-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            onClick={(e) => { if (e.target === e.currentTarget) { setShowScheduleModal(false); setScheduleSearch(''); } }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="bg-white rounded-2xl shadow-2xl max-w-lg w-full"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-violet-50 to-indigo-50 rounded-t-2xl">
+                <div>
+                  <h2 className="text-xl font-bold bg-gradient-to-r from-violet-600 to-indigo-600 bg-clip-text text-transparent">Schedule Activity</h2>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+                  </p>
+                </div>
+                <button onClick={() => { setShowScheduleModal(false); setScheduleSearch(''); }} className="p-2 hover:bg-white rounded-xl transition">
+                  <Icon name="X" size={20} className="text-gray-500" />
+                </button>
+              </div>
+              <form onSubmit={handleScheduleSubmit} className="p-5 space-y-4 max-h-[60vh] overflow-y-auto">
+
+                {/* Activity Search */}
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1.5 flex items-center gap-1.5">
+                    <Icon name="Activity" size={14} className="text-violet-600" />
+                    Activity *
+                  </label>
+                  <div className="relative">
+                    <div className="relative">
+                      <Icon name="Search" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                      <input
+                        ref={scheduleSearchRef}
+                        type="text"
+                        placeholder="Search activities..."
+                        value={scheduleSearch}
+                        onChange={e => {
+                          setScheduleSearch(e.target.value);
+                          setScheduleDropdownOpen(true);
+                          if (!e.target.value) setScheduleForm({ ...scheduleForm, activity_id: '', location: '' });
+                        }}
+                        onFocus={() => setScheduleDropdownOpen(true)}
+                        onBlur={() => setTimeout(() => setScheduleDropdownOpen(false), 150)}
+                        className="w-full pl-8 pr-8 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition"
+                        autoComplete="off"
+                      />
+                      {scheduleSearch && (
+                        <button type="button" onClick={() => { setScheduleSearch(''); setScheduleForm({ ...scheduleForm, activity_id: '', location: '' }); scheduleSearchRef.current?.focus(); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                          <Icon name="X" size={12} />
+                        </button>
+                      )}
+                    </div>
+                    {scheduleDropdownOpen && (() => {
+                      const q = scheduleSearch.toLowerCase();
+                      const filtered = allActivitiesList.filter(a =>
+                        !q || a.name.toLowerCase().includes(q) || (a.activity_categories?.name || '').toLowerCase().includes(q)
+                      );
+                      return filtered.length > 0 ? (
+                        <ul className="absolute z-50 w-full mt-1 bg-white border-2 border-violet-200 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                          {filtered.map(a => (
+                            <li key={a.id} onMouseDown={() => {
+                              setScheduleForm({ ...scheduleForm, activity_id: a.id, location: a.location || '' });
+                              setScheduleSearch(a.name);
+                              setScheduleDropdownOpen(false);
+                            }} className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-violet-50 transition text-sm ${scheduleForm.activity_id === a.id ? 'bg-violet-50' : ''}`}>
+                              {a.image_url && <img src={a.image_url} alt="" className="w-7 h-7 rounded-lg object-cover flex-shrink-0" />}
+                              <div className="flex-1 min-w-0">
+                                <p className="font-semibold text-gray-800 truncate text-sm">{a.name}</p>
+                                <p className="text-xs text-gray-400">{a.activity_categories?.name || 'Uncategorized'} · {a.duration_minutes} min</p>
+                              </div>
+                              {scheduleForm.activity_id === a.id && <Icon name="Check" size={14} className="text-violet-600" />}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow px-3 py-2 text-sm text-gray-400">No matches</div>
+                      );
+                    })()}
+                  </div>
+                </div>
+
+                {/* Time row */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-1.5 flex items-center gap-1.5">
+                      <Icon name="Clock" size={14} className="text-violet-600" />
+                      Start Time *
+                    </label>
+                    <input type="time" value={scheduleForm.start_time} onChange={e => setScheduleForm({ ...scheduleForm, start_time: e.target.value, end_time: scheduleForm.end_time || addOneHour(e.target.value) })} className="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent" required />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-1.5 flex items-center gap-1.5">
+                      <Icon name="Clock" size={14} className="text-violet-600" />
+                      End Time
+                    </label>
+                    <input type="time" value={scheduleForm.end_time} onChange={e => setScheduleForm({ ...scheduleForm, end_time: e.target.value })} className="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent" />
+                  </div>
+                </div>
+
+                {/* Location */}
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1.5 flex items-center gap-1.5">
+                    <Icon name="MapPin" size={14} className="text-violet-600" />
+                    Location
+                  </label>
+                  <input type="text" value={scheduleForm.location} onChange={e => setScheduleForm({ ...scheduleForm, location: e.target.value })} placeholder="e.g. Main Hall" className="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent" />
+                </div>
+
+                {/* Notes */}
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1.5 flex items-center gap-1.5">
+                    <Icon name="FileText" size={14} className="text-violet-600" />
+                    Notes
+                  </label>
+                  <textarea value={scheduleForm.notes} onChange={e => setScheduleForm({ ...scheduleForm, notes: e.target.value })} rows={2} placeholder="Optional notes..." className="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent resize-none" />
+                </div>
+
+                {/* Buttons */}
+                <div className="flex gap-3 pt-2">
+                  <button type="button" onClick={() => { setShowScheduleModal(false); setScheduleSearch(''); setScheduleForm({ activity_id: '', start_time: '', end_time: '', location: '', notes: '' }); }} className="flex-1 py-2.5 border-2 border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition text-sm font-semibold">
+                    Cancel
+                  </button>
+                  <button type="submit" disabled={!scheduleForm.activity_id || !scheduleForm.start_time} className="flex-1 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-xl text-sm font-semibold shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 transition disabled:opacity-50 disabled:cursor-not-allowed">
+                    Schedule for Today
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
 

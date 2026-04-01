@@ -409,11 +409,11 @@ const ScheduleCalendar = ({ careHomes = [], initialCareHomeId, isLoading = false
     if (activities.length === 0) return <span className="text-slate-400">—</span>;
 
     return (
-      <div className="whitespace-normal break-normal leading-snug">
-        {activities.slice(0, 2).map((activity, idx) => (
+      <div className="whitespace-normal break-normal leading-snug divide-y divide-slate-200 dark:divide-slate-600">
+        {activities.slice(0, 3).map((activity, idx) => (
           <div
             key={activity.id}
-            className="font-medium flex items-start gap-1 mb-1 cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors text-xs"
+            className={`font-medium flex items-start gap-1 cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors text-xs ${idx > 0 ? 'pt-1 mt-1' : ''} pb-1`}
             onClick={() => setSelectedActivityDetail(activity)}
             title="Click to view details"
           >
@@ -423,8 +423,8 @@ const ScheduleCalendar = ({ careHomes = [], initialCareHomeId, isLoading = false
             )}
           </div>
         ))}
-        {activities.length > 2 && (
-          <div className="text-xs text-slate-500">+{activities.length - 2} more</div>
+        {activities.length > 3 && (
+          <div className="text-xs text-slate-500 pt-1">+{activities.length - 3} more</div>
         )}
       </div>
     );
@@ -436,11 +436,11 @@ const ScheduleCalendar = ({ careHomes = [], initialCareHomeId, isLoading = false
     if (activities.length === 0) return <span className="text-slate-400">—</span>;
 
     return (
-      <div className="whitespace-normal break-normal leading-snug">
+      <div className="whitespace-normal break-normal leading-snug divide-y divide-slate-200 dark:divide-slate-600">
         {activities.map((activity, idx) => (
           <div
             key={activity.id}
-            className="mb-2 last:mb-0 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 p-2 rounded transition-colors"
+            className={`${idx > 0 ? 'pt-2 mt-1' : ''} pb-2 last:pb-0 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 p-2 rounded transition-colors`}
             onClick={() => setSelectedActivityDetail(activity)}
             title="Click to view details"
           >
@@ -931,20 +931,25 @@ const ScheduleCalendar = ({ careHomes = [], initialCareHomeId, isLoading = false
                                     setSelectedActivityDetail(activities[0]);
                                   }
                                 }}
-                                title={`${activities.length} ${activities.length === 1 ? 'activity' : 'activities'} - Click to view details`}
+                                title={`${activities.length} ${activities.length === 1 ? 'activity' : 'activities'}`}
                               >
                                 <div className="flex items-center gap-1 mb-1">
                                   <span>{cfg.icon}</span>
                                   <span className="font-medium">{activities.length}</span>
                                 </div>
-                                <div className="space-y-1">
-                                  {activities.slice(0, 2).map((activity) => (
-                                    <div key={activity.id} className="truncate text-xs">
+                                <div className="divide-y divide-current/20">
+                                  {activities.slice(0, 3).map((activity) => (
+                                    <div
+                                      key={activity.id}
+                                      className="truncate text-xs py-0.5 hover:underline cursor-pointer"
+                                      onClick={(e) => { e.stopPropagation(); setSelectedActivityDetail(activity); }}
+                                      title={`View: ${activity.activity?.name}`}
+                                    >
                                       {activity.activity?.name}
                                     </div>
                                   ))}
-                                  {activities.length > 2 && (
-                                    <div className="text-xs opacity-75">+{activities.length - 2} more</div>
+                                  {activities.length > 3 && (
+                                    <div className="text-xs opacity-75 pt-0.5">+{activities.length - 3} more</div>
                                   )}
                                 </div>
                               </div>
@@ -1063,18 +1068,7 @@ const ScheduleCalendar = ({ careHomes = [], initialCareHomeId, isLoading = false
       {/* Activity Detail Modal */}
       <ActivityDetailsModal
         isOpen={!!selectedActivityDetail}
-        activity={selectedActivityDetail ? {
-          ...selectedActivityDetail,
-          name: selectedActivityDetail.activity?.name,
-          category: selectedActivityDetail.activity?.category,
-          description: selectedActivityDetail.activity?.description,
-          participants: selectedActivityDetail.activity?.max_participants || 0,
-          duration: selectedActivityDetail.activity?.duration_minutes || 0,
-          image: 'https://images.unsplash.com/photo-1559757148-5c350d0d3c56?w=400&h=300&fit=crop', // Default activity image
-          instructions: [], // Could be expanded later
-          materials: [], // Could be expanded later
-          suitabilityCriteria: [] // Could be expanded later
-        } : null}
+        activity={selectedActivityDetail || null}
         onClose={() => setSelectedActivityDetail(null)}
       />
     </div>

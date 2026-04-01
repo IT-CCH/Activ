@@ -15,6 +15,10 @@ CREATE TABLE IF NOT EXISTS public.expense_budgets (
 -- Enable RLS
 ALTER TABLE public.expense_budgets ENABLE ROW LEVEL SECURITY;
 
+-- Drop existing policies before recreating (safe to re-run)
+DROP POLICY IF EXISTS "Anyone can view expense budgets" ON public.expense_budgets;
+DROP POLICY IF EXISTS "Admins can manage expense budgets" ON public.expense_budgets;
+
 -- Everyone can view budgets
 CREATE POLICY "Anyone can view expense budgets"
   ON public.expense_budgets
@@ -29,7 +33,20 @@ CREATE POLICY "Admins can manage expense budgets"
     EXISTS (
       SELECT 1 FROM public.user_profiles
       WHERE user_profiles.id = auth.uid()
-      AND user_profiles.role IN ('super_admin', 'org_admin', 'admin', 'care_home_manager')
+      AND user_profiles.role IN (
+        'super_admin', 'org_admin', 'admin',
+        'Super Admin', 'Organization Admin', 'Care Home Manager', 'care_home_manager'
+      )
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.user_profiles
+      WHERE user_profiles.id = auth.uid()
+      AND user_profiles.role IN (
+        'super_admin', 'org_admin', 'admin',
+        'Super Admin', 'Organization Admin', 'Care Home Manager', 'care_home_manager'
+      )
     )
   );
 

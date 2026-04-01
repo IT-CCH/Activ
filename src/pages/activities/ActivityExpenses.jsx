@@ -142,7 +142,7 @@ const ActivityExpenses = () => {
       setBudgetInput('');
     } catch (err) {
       console.error('Error saving budget:', err);
-      alert('Failed to save budget. Make sure the expense_budgets table exists — see the SQL migration file.');
+      alert(`Failed to save budget: ${err.message || err.details || JSON.stringify(err)}\n\nIf the table is missing, run the SQL migration file in Supabase.`);
     } finally {
       setBudgetSaving(false);
     }

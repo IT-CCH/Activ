@@ -26,6 +26,11 @@ const CalendarPage = () => {
   const [loading, setLoading] = useState(true);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [showActivityDetail, setShowActivityDetail] = useState(null);
+  const [activityDetailMedia, setActivityDetailMedia] = useState([]);
+  const [loadingMedia, setLoadingMedia] = useState(false);
+  const [activitySearch, setActivitySearch] = useState('');
+  const [activityDropdownOpen, setActivityDropdownOpen] = useState(false);
+  const activitySearchRef = useRef(null);
 
   // Multi-care-home support
   const [careHomes, setCareHomes] = useState([]);
@@ -92,6 +97,35 @@ const CalendarPage = () => {
   useEffect(() => {
     fetchScheduledActivities();
   }, [currentDate, selectedCareHomeId]);
+
+  // Fetch media when activity detail modal opens
+  useEffect(() => {
+    const fetchMedia = async () => {
+      if (!showActivityDetail?.id) {
+        setActivityDetailMedia([]);
+        return;
+      }
+      setLoadingMedia(true);
+      try {
+        const { data, error } = await supabase
+          .from('activity_media')
+          .select('id, media_type, title, tagline, description, file_path, file_name, external_url, youtube_video_id, thumbnail_url, display_order, is_primary')
+          .eq('activity_id', showActivityDetail.id)
+          .order('is_primary', { ascending: false })
+          .order('display_order', { ascending: true });
+        if (!error && Array.isArray(data)) {
+          setActivityDetailMedia(data);
+        } else {
+          setActivityDetailMedia([]);
+        }
+      } catch {
+        setActivityDetailMedia([]);
+      } finally {
+        setLoadingMedia(false);
+      }
+    };
+    fetchMedia();
+  }, [showActivityDetail?.id]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -250,6 +284,7 @@ const CalendarPage = () => {
         notes: '',
         care_home_id: ''
       });
+      setActivitySearch('');
       setShowScheduleModal(false);
       await fetchData();
     } catch (err) {
@@ -727,6 +762,87 @@ const CalendarPage = () => {
                     </div>
                   )}
 
+                  {/* Media & References */}
+                  {loadingMedia && (
+                    <p className="text-xs text-gray-400">Loading media...</p>
+                  )}
+                  {activityDetailMedia.length > 0 && (
+                    <div>
+                      <h3 className="font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-3 text-lg flex items-center gap-2">
+                        <Icon name="Image" size={20} className="text-indigo-600" />
+                        Media & References
+                      </h3>
+                      <div className="space-y-4">
+                        {activityDetailMedia.map((media) => {
+                          const mediaType = (media.media_type || '').toLowerCase();
+                          const link = media.external_url || (media.file_path ? supabase.storage.from('activity-media').getPublicUrl(media.file_path).data?.publicUrl : null) || media.thumbnail_url;
+
+                          // Determine YouTube embed
+                          let youtubeEmbed = null;
+                          if (media.youtube_video_id) {
+                            youtubeEmbed = `https://www.youtube.com/embed/${media.youtube_video_id}`;
+                          } else if (link) {
+                            try {
+                              const url = new URL(link);
+                              if (url.hostname.includes('youtu.be')) {
+                                youtubeEmbed = `https://www.youtube.com/embed/${url.pathname.replace('/', '')}`;
+                              } else if (url.hostname.includes('youtube.com') && url.searchParams.get('v')) {
+                                youtubeEmbed = `https://www.youtube.com/embed/${url.searchParams.get('v')}`;
+                              }
+                            } catch {}
+                          }
+
+                          const isImage = mediaType === 'photo' || /\.(png|jpe?g|gif|webp|svg)$/i.test(`${link || ''} ${media.file_name || ''}`);
+                          const isVideo = mediaType === 'video' || /\.(mp4|mov|webm|m4v)$/i.test(`${link || ''} ${media.file_name || ''}`);
+                          const isYouTube = mediaType === 'youtube' || !!youtubeEmbed;
+
+                          return (
+                            <div key={media.id} className="rounded-xl border border-gray-200 bg-gray-50 overflow-hidden">
+                              {media.title && (
+                                <div className="px-4 py-2 border-b border-gray-100 bg-white">
+                                  <p className="font-semibold text-sm text-gray-800">{media.title}</p>
+                                  {media.tagline && <p className="text-xs text-gray-500">{media.tagline}</p>}
+                                </div>
+                              )}
+
+                              {isYouTube && youtubeEmbed && (
+                                <iframe
+                                  title={media.title || 'YouTube media'}
+                                  src={youtubeEmbed}
+                                  className="w-full aspect-video"
+                                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                  allowFullScreen
+                                />
+                              )}
+
+                              {isImage && link && !isYouTube && (
+                                <img src={link} alt={media.title || 'Media'} className="w-full max-h-[50vh] object-contain bg-white" />
+                              )}
+
+                              {isVideo && link && !isYouTube && (
+                                <video controls preload="metadata" className="w-full aspect-video bg-black">
+                                  <source src={link} />
+                                </video>
+                              )}
+
+                              {media.description && (
+                                <div className="px-4 py-2 text-xs text-gray-600">{media.description}</div>
+                              )}
+
+                              {link && !isYouTube && (
+                                <div className="px-4 py-2 border-t border-gray-100">
+                                  <a href={link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-700 font-medium">
+                                    Open in new tab <Icon name="ExternalLink" size={12} />
+                                  </a>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Activity Details Grid */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-6 border-t border-gray-200">
                     <div className="flex items-center gap-3 bg-blue-50 p-4 rounded-xl">
@@ -784,7 +900,7 @@ const CalendarPage = () => {
             className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
             onMouseDown={(e) => { if (e.target === e.currentTarget) mouseDownOnBackdrop.current = true; }}
             onMouseUp={(e) => {
-              if (e.target === e.currentTarget && mouseDownOnBackdrop.current) setShowScheduleModal(false);
+              if (e.target === e.currentTarget && mouseDownOnBackdrop.current) { setActivitySearch(''); setShowScheduleModal(false); }
               mouseDownOnBackdrop.current = false;
             }}
           >
@@ -812,7 +928,7 @@ const CalendarPage = () => {
                   </p>
                 </div>
                 <button
-                  onClick={() => setShowScheduleModal(false)}
+                  onClick={() => { setActivitySearch(''); setShowScheduleModal(false); }}
                   className="p-2 hover:bg-white rounded-xl transition shadow-sm"
                 >
                   <Icon name="X" size={24} className="text-gray-600" />
@@ -844,26 +960,93 @@ const CalendarPage = () => {
                     <Icon name="Activity" size={16} className="text-indigo-600" />
                     Select Activity *
                   </label>
-                  <select
-                    value={scheduleFormData.activity_id}
-                    onChange={e => {
-                      const activity = allActivities.find(a => a.id === e.target.value);
-                      setScheduleFormData({
-                        ...scheduleFormData,
-                        activity_id: e.target.value,
-                        location: activity?.location || ''
-                      });
-                    }}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
-                    required
-                  >
-                    <option value="">Choose an activity from your list</option>
-                    {allActivities.filter(a => a.status === 'active').map(activity => (
-                      <option key={activity.id} value={activity.id}>
-                        {activity.name} ({activity.activity_categories?.name || 'Uncategorized'}) - {activity.duration_minutes} min
-                      </option>
-                    ))}
-                  </select>
+                  {/* Searchable activity combobox */}
+                  <div className="relative">
+                    <div className="relative">
+                      <Icon name="Search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                      <input
+                        ref={activitySearchRef}
+                        type="text"
+                        placeholder="Type to search activities..."
+                        value={activitySearch}
+                        onChange={e => {
+                          setActivitySearch(e.target.value);
+                          setActivityDropdownOpen(true);
+                          if (!e.target.value) {
+                            setScheduleFormData({ ...scheduleFormData, activity_id: '', location: '' });
+                          }
+                        }}
+                        onFocus={() => setActivityDropdownOpen(true)}
+                        onBlur={() => setTimeout(() => setActivityDropdownOpen(false), 150)}
+                        className="w-full pl-9 pr-10 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                        autoComplete="off"
+                      />
+                      {activitySearch && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActivitySearch('');
+                            setScheduleFormData({ ...scheduleFormData, activity_id: '', location: '' });
+                            activitySearchRef.current?.focus();
+                          }}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        >
+                          <Icon name="X" size={14} />
+                        </button>
+                      )}
+                    </div>
+                    {/* Hidden native input to satisfy required validation */}
+                    <input type="hidden" value={scheduleFormData.activity_id} required />
+                    {activityDropdownOpen && (() => {
+                      const filtered = allActivities
+                        .filter(a => a.status === 'active')
+                        .filter(a => {
+                          const q = activitySearch.toLowerCase();
+                          return !q
+                            || a.name.toLowerCase().includes(q)
+                            || (a.activity_categories?.name || '').toLowerCase().includes(q)
+                            || (a.description || '').toLowerCase().includes(q);
+                        });
+                      return filtered.length > 0 ? (
+                        <ul className="absolute z-50 w-full mt-1 bg-white border-2 border-indigo-200 rounded-xl shadow-xl max-h-56 overflow-y-auto">
+                          {filtered.map(activity => (
+                            <li
+                              key={activity.id}
+                              onMouseDown={() => {
+                                setScheduleFormData({
+                                  ...scheduleFormData,
+                                  activity_id: activity.id,
+                                  location: activity.location || ''
+                                });
+                                setActivitySearch(activity.name);
+                                setActivityDropdownOpen(false);
+                              }}
+                              className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-indigo-50 transition-colors ${
+                                scheduleFormData.activity_id === activity.id ? 'bg-indigo-50' : ''
+                              }`}
+                            >
+                              {activity.image_url && (
+                                <img src={activity.image_url} alt="" className="w-8 h-8 rounded-lg object-cover flex-shrink-0" />
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold text-gray-800 truncate">{activity.name}</p>
+                                <p className="text-xs text-gray-500 truncate">
+                                  {activity.activity_categories?.name || 'Uncategorized'} &middot; {activity.duration_minutes} min
+                                </p>
+                              </div>
+                              {scheduleFormData.activity_id === activity.id && (
+                                <Icon name="Check" size={14} className="text-indigo-600 flex-shrink-0" />
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <div className="absolute z-50 w-full mt-1 bg-white border-2 border-gray-200 rounded-xl shadow-lg px-4 py-3 text-sm text-gray-500">
+                          No activities match &ldquo;{activitySearch}&rdquo;
+                        </div>
+                      );
+                    })()}
+                  </div>
                   {/* Selected activity preview */}
                   {scheduleFormData.activity_id && (() => {
                     const sel = allActivities.find(a => a.id === scheduleFormData.activity_id);
@@ -995,7 +1178,7 @@ const CalendarPage = () => {
                     type="button"
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    onClick={() => setShowScheduleModal(false)}
+                    onClick={() => { setActivitySearch(''); setShowScheduleModal(false); }}
                     className="flex-1 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition font-bold"
                   >
                     Cancel

@@ -21,8 +21,6 @@ const ActivityDetailsModal = ({ isOpen, activity: session, onClose, onMarkComple
   const mergedActivity = useMemo(() => ({ ...act, ...fullActivity }), [act, fullActivity]);
   const category = mergedActivity.activity_categories;
 
-  if (!isOpen || !session) return null;
-
   const formatTime = (t) => {
     if (!t) return '';
     const parts = t.split(':');
@@ -225,6 +223,9 @@ const ActivityDetailsModal = ({ isOpen, activity: session, onClose, onMarkComple
 
     loadFullDetails();
   }, [isOpen, activityId]);
+
+  // Early return after all hooks
+  if (!isOpen || !session) return null;
 
   // Colour chip helpers
   const chipColors = [
