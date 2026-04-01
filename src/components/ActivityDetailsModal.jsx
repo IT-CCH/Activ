@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Icon from './AppIcon';
+import ActivityMediaCarousel from './activities/ActivityMediaCarousel';
 import supabase from '../services/supabaseClient';
 
 const ActivityDetailsModal = ({ isOpen, activity: session, onClose, onMarkComplete, onEdit }) => {
@@ -86,46 +87,6 @@ const ActivityDetailsModal = ({ isOpen, activity: session, onClose, onMarkComple
   const materialsList = parseList(mergedActivity.materials_needed);
   const instructionsList = parseList(mergedActivity.instructions);
   const benefitsList = parseList(mergedActivity.benefits);
-
-  const getMediaLink = (media) => {
-    if (media.external_url) return media.external_url;
-    if (media.file_path) {
-      const { data } = supabase.storage.from('activity-media').getPublicUrl(media.file_path);
-      return data?.publicUrl || media.file_path;
-    }
-    return media.thumbnail_url || null;
-  };
-
-  const getYouTubeEmbedUrl = (media) => {
-    if (media.youtube_video_id) return `https://www.youtube.com/embed/${media.youtube_video_id}`;
-    if (!media.external_url) return null;
-    try {
-      const url = new URL(media.external_url);
-      if (url.hostname.includes('youtu.be')) {
-        const id = url.pathname.replace('/', '');
-        return id ? `https://www.youtube.com/embed/${id}` : null;
-      }
-      if (url.hostname.includes('youtube.com')) {
-        const id = url.searchParams.get('v');
-        return id ? `https://www.youtube.com/embed/${id}` : null;
-      }
-    } catch {
-      return null;
-    }
-    return null;
-  };
-
-  const getMediaKind = (media, link) => {
-    const type = (media.media_type || '').toLowerCase();
-    const source = `${link || ''} ${media.file_name || ''} ${media.mime_type || ''}`.toLowerCase();
-
-    if (type === 'youtube' || getYouTubeEmbedUrl(media)) return 'youtube';
-    if (type === 'photo' || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(source)) return 'image';
-    if (type === 'video' || /\.(mp4|mov|webm|m4v|ogg)$/i.test(source)) return 'video';
-    if (type === 'pdf' || /\.pdf$/i.test(source)) return 'pdf';
-    if (type === 'website') return 'website';
-    return 'file';
-  };
 
   useEffect(() => {
     const loadFullDetails = async () => {
@@ -426,120 +387,7 @@ const ActivityDetailsModal = ({ isOpen, activity: session, onClose, onMarkComple
 
               {mediaItems.length > 0 && (
                 <div className="px-5 py-4 border-b border-gray-100">
-                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Media & References</h3>
-                  <div className="space-y-2.5">
-                    {mediaItems.map((media) => {
-                      const link = getMediaLink(media);
-                      const kind = getMediaKind(media, link);
-                      const youtubeEmbed = getYouTubeEmbedUrl(media);
-                      const thumb = media.thumbnail_url || (media.media_type === 'photo' ? link : null);
-
-                      return (
-                        <div key={media.id} className="p-2.5 rounded-lg border border-slate-100 bg-white">
-                          <div className="flex gap-3 mb-2">
-                            <div className="w-14 h-14 rounded-lg bg-slate-100 flex items-center justify-center overflow-hidden flex-shrink-0">
-                              {thumb ? (
-                                <img src={thumb} alt={media.title || media.file_name || 'Media'} className="w-full h-full object-cover" />
-                              ) : (
-                                <Icon
-                                  name={media.media_type === 'video' || media.media_type === 'youtube' ? 'Video' : media.media_type === 'photo' ? 'Image' : media.media_type === 'website' ? 'Globe' : 'FileText'}
-                                  size={18}
-                                  className="text-slate-500"
-                                />
-                              )}
-                            </div>
-
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-start justify-between gap-2">
-                                <p className="text-sm font-semibold text-slate-800 truncate">
-                                  {media.title || media.file_name || `${media.media_type || 'media'} item`}
-                                </p>
-                                {media.is_primary && (
-                                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700">Primary</span>
-                                )}
-                              </div>
-
-                              {media.tagline && <p className="text-xs text-slate-500 truncate">{media.tagline}</p>}
-                              {media.description && <p className="text-xs text-slate-600 mt-1 line-clamp-2">{media.description}</p>}
-                            </div>
-                          </div>
-
-                          <div className="rounded-lg overflow-hidden border border-slate-100 bg-slate-50">
-                            {kind === 'image' && link && (
-                              <img
-                                src={link}
-                                alt={media.title || media.file_name || 'Image'}
-                                style={{ width: '100%', aspectRatio: '16/9', maxHeight: '65vh', objectFit: 'cover' }}
-                              />
-                            )}
-
-                            {kind === 'video' && link && (
-                              <video
-                                controls
-                                preload="metadata"
-                                style={{ width: '100%', aspectRatio: '16/9', maxHeight: '65vh', background: 'black' }}
-                              >
-                                <source src={link} />
-                                Your browser does not support video playback.
-                              </video>
-                            )}
-
-                            {kind === 'youtube' && youtubeEmbed && (
-                              <iframe
-                                title={media.title || 'YouTube media'}
-                                src={youtubeEmbed}
-                                style={{ width: '100%', aspectRatio: '16/9', maxHeight: '65vh', border: 0 }}
-                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                allowFullScreen
-                              />
-                            )}
-
-                            {kind === 'pdf' && link && (
-                              <iframe
-                                title={media.title || 'PDF media'}
-                                src={link}
-                                style={{ width: '100%', aspectRatio: '4/3', maxHeight: '70vh', border: 0, background: 'white' }}
-                              />
-                            )}
-
-                            {kind === 'website' && link && (
-                              <>
-                                <iframe
-                                  title={media.title || 'Website preview'}
-                                  src={link}
-                                  style={{ width: '100%', aspectRatio: '16/9', maxHeight: '70vh', border: 0, background: 'white' }}
-                                />
-                                <div className="px-3 py-2 text-xs text-slate-500 border-t border-slate-100">
-                                  If preview is blocked by the website, use open link below.
-                                </div>
-                              </>
-                            )}
-
-                            {kind === 'file' && (
-                              <div className="p-3">
-                                <div className="flex items-center gap-2 text-sm text-slate-700">
-                                  <Icon name="FileText" size={16} className="text-slate-500" />
-                                  <span className="truncate">{media.file_name || media.title || 'Attached file'}</span>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-
-                          {link && (
-                            <a
-                              href={link}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-1 mt-2 text-xs text-indigo-600 hover:text-indigo-700 font-medium"
-                            >
-                              Open in new tab
-                              <Icon name="ExternalLink" size={12} />
-                            </a>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
+                  <ActivityMediaCarousel mediaItems={mediaItems} />
                 </div>
               )}
 

@@ -2,6 +2,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import Icon from '../../components/AppIcon';
 import Header from '../../components/navigation/Header';
+import ActivityMediaCarousel from '../../components/activities/ActivityMediaCarousel';
 import { useAuth } from '../../context/AuthContext';
 import supabase from '../../services/supabaseClient';
 import { writeAuditLog } from '../../services/activityAuditService';
@@ -604,23 +605,6 @@ const ActivitiesCalendar = () => {
     return matchesSearch && matchesCategory;
   });
 
-  const getMediaLink = (item) => {
-    if (!item) return null;
-    if (item.media_type === 'youtube' && item.youtube_video_id) {
-      return `https://www.youtube.com/watch?v=${item.youtube_video_id}`;
-    }
-    return item.external_url || null;
-  };
-
-  const getMediaThumb = (item) => {
-    if (!item) return null;
-    if (item.thumbnail_url) return item.thumbnail_url;
-    if (item.media_type === 'youtube' && item.youtube_video_id) {
-      return `https://img.youtube.com/vi/${item.youtube_video_id}/hqdefault.jpg`;
-    }
-    return null;
-  };
-
   if (loading) {
     return (
       <>
@@ -1215,93 +1199,7 @@ const ActivitiesCalendar = () => {
                   )}
 
                   {Array.isArray(showActivityDetail.activity_media) && showActivityDetail.activity_media.length > 0 && (
-                    <div>
-                      <div className="flex items-center justify-between mb-3">
-                        <h3 className="font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent text-lg flex items-center gap-2">
-                          <Icon name="Paperclip" size={20} className="text-indigo-600" />
-                          Resources & Media ({showActivityDetail.activity_media.length})
-                        </h3>
-                      </div>
-                      <div className="space-y-4">
-                        {showActivityDetail.activity_media.map((media) => {
-                          const mediaLink = getMediaLink(media);
-                          return (
-                            <div key={media.id} className="border border-gray-200 rounded-xl p-3 bg-gray-50 space-y-3">
-                              {(media.media_type === 'youtube' && media.youtube_video_id) && (
-                                <div className="aspect-video rounded-lg overflow-hidden bg-black">
-                                  <iframe
-                                    src={`https://www.youtube.com/embed/${media.youtube_video_id}`}
-                                    title={media.title || media.file_name || 'YouTube video'}
-                                    className="w-full h-full"
-                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                    allowFullScreen
-                                  />
-                                </div>
-                              )}
-
-                              {(media.media_type === 'video' && media.external_url) && (
-                                <video controls className="w-full rounded-lg bg-black max-h-80">
-                                  <source src={media.external_url} type={media.mime_type || 'video/mp4'} />
-                                  Your browser does not support the video tag.
-                                </video>
-                              )}
-
-                              {(media.media_type === 'photo' && media.external_url) && (
-                                <img
-                                  src={media.external_url}
-                                  alt={media.title || media.file_name || 'Activity media'}
-                                  className="w-full rounded-lg object-cover max-h-80"
-                                />
-                              )}
-
-                              {(media.media_type === 'pdf' && media.external_url) && (
-                                <iframe
-                                  src={media.external_url}
-                                  title={media.title || media.file_name || 'PDF document'}
-                                  className="w-full h-80 rounded-lg border bg-white"
-                                />
-                              )}
-
-                              {(media.media_type !== 'youtube' && media.media_type !== 'video' && media.media_type !== 'photo' && media.media_type !== 'pdf') && (
-                                <div className="w-full h-36 rounded-lg bg-indigo-50 flex items-center justify-center">
-                                  <Icon name="File" size={24} className="text-indigo-600" />
-                                </div>
-                              )}
-
-                              <div className="flex items-start gap-3">
-                                {getMediaThumb(media) ? (
-                                  <img
-                                    src={getMediaThumb(media)}
-                                    alt={media.title || media.file_name || 'Media'}
-                                    className="w-16 h-16 rounded-lg object-cover"
-                                  />
-                                ) : (
-                                  <div className="w-16 h-16 rounded-lg bg-indigo-100 flex items-center justify-center">
-                                    <Icon name="File" size={22} className="text-indigo-600" />
-                                  </div>
-                                )}
-                                <div className="min-w-0 flex-1">
-                                  <p className="text-sm font-semibold text-gray-900 truncate">
-                                    {media.title || media.file_name || 'Untitled media'}
-                                  </p>
-                                  <p className="text-xs text-gray-500 capitalize">{media.media_type || 'file'}</p>
-                                  {mediaLink && (
-                                    <a
-                                      href={mediaLink}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-xs text-indigo-600 hover:text-indigo-700 font-medium"
-                                    >
-                                      Open
-                                    </a>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
+                    <ActivityMediaCarousel mediaItems={showActivityDetail.activity_media} heading={`Resources & Media (${showActivityDetail.activity_media.length})`} />
                   )}
                   
                   {/* Activity Details Grid */}

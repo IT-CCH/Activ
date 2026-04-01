@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Icon from '../../components/AppIcon';
 import Header from '../../components/navigation/Header';
+import ActivityMediaCarousel from '../../components/activities/ActivityMediaCarousel';
 import { useAuth } from '../../context/AuthContext';
 import supabase from '../../services/supabaseClient';
 import sanitizeHtml from '../../utils/sanitizeHtml';
@@ -767,80 +768,7 @@ const CalendarPage = () => {
                     <p className="text-xs text-gray-400">Loading media...</p>
                   )}
                   {activityDetailMedia.length > 0 && (
-                    <div>
-                      <h3 className="font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-3 text-lg flex items-center gap-2">
-                        <Icon name="Image" size={20} className="text-indigo-600" />
-                        Media & References
-                      </h3>
-                      <div className="space-y-4">
-                        {activityDetailMedia.map((media) => {
-                          const mediaType = (media.media_type || '').toLowerCase();
-                          const link = media.external_url || (media.file_path ? supabase.storage.from('activity-media').getPublicUrl(media.file_path).data?.publicUrl : null) || media.thumbnail_url;
-
-                          // Determine YouTube embed
-                          let youtubeEmbed = null;
-                          if (media.youtube_video_id) {
-                            youtubeEmbed = `https://www.youtube.com/embed/${media.youtube_video_id}`;
-                          } else if (link) {
-                            try {
-                              const url = new URL(link);
-                              if (url.hostname.includes('youtu.be')) {
-                                youtubeEmbed = `https://www.youtube.com/embed/${url.pathname.replace('/', '')}`;
-                              } else if (url.hostname.includes('youtube.com') && url.searchParams.get('v')) {
-                                youtubeEmbed = `https://www.youtube.com/embed/${url.searchParams.get('v')}`;
-                              }
-                            } catch {}
-                          }
-
-                          const isImage = mediaType === 'photo' || /\.(png|jpe?g|gif|webp|svg)$/i.test(`${link || ''} ${media.file_name || ''}`);
-                          const isVideo = mediaType === 'video' || /\.(mp4|mov|webm|m4v)$/i.test(`${link || ''} ${media.file_name || ''}`);
-                          const isYouTube = mediaType === 'youtube' || !!youtubeEmbed;
-
-                          return (
-                            <div key={media.id} className="rounded-xl border border-gray-200 bg-gray-50 overflow-hidden">
-                              {media.title && (
-                                <div className="px-4 py-2 border-b border-gray-100 bg-white">
-                                  <p className="font-semibold text-sm text-gray-800">{media.title}</p>
-                                  {media.tagline && <p className="text-xs text-gray-500">{media.tagline}</p>}
-                                </div>
-                              )}
-
-                              {isYouTube && youtubeEmbed && (
-                                <iframe
-                                  title={media.title || 'YouTube media'}
-                                  src={youtubeEmbed}
-                                  className="w-full aspect-video"
-                                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                  allowFullScreen
-                                />
-                              )}
-
-                              {isImage && link && !isYouTube && (
-                                <img src={link} alt={media.title || 'Media'} className="w-full max-h-[50vh] object-contain bg-white" />
-                              )}
-
-                              {isVideo && link && !isYouTube && (
-                                <video controls preload="metadata" className="w-full aspect-video bg-black">
-                                  <source src={link} />
-                                </video>
-                              )}
-
-                              {media.description && (
-                                <div className="px-4 py-2 text-xs text-gray-600">{media.description}</div>
-                              )}
-
-                              {link && !isYouTube && (
-                                <div className="px-4 py-2 border-t border-gray-100">
-                                  <a href={link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-700 font-medium">
-                                    Open in new tab <Icon name="ExternalLink" size={12} />
-                                  </a>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
+                    <ActivityMediaCarousel mediaItems={activityDetailMedia} />
                   )}
 
                   {/* Activity Details Grid */}

@@ -87,6 +87,46 @@ const getYouTubeEmbedUrl = (value) => {
   return null;
 };
 
+const getYouTubeId = (media) => {
+  if (!media) return null;
+  if (media.youtube_video_id) return media.youtube_video_id;
+
+  const raw = media.external_url || '';
+  if (!raw) return null;
+
+  try {
+    const url = new URL(raw);
+    if (url.hostname.includes('youtu.be')) {
+      const id = url.pathname.replace('/', '');
+      return id || null;
+    }
+    if (url.hostname.includes('youtube.com')) {
+      return url.searchParams.get('v') || null;
+    }
+  } catch {
+    // ignore invalid urls
+  }
+  return null;
+};
+
+const getActivityMediaPreviewUrl = (media) => {
+  if (!media) return null;
+
+  if (media.thumbnail_url) return media.thumbnail_url;
+
+  const ytId = getYouTubeId(media);
+  if (ytId) return `https://img.youtube.com/vi/${ytId}/hqdefault.jpg`;
+
+  if (media.external_url) return media.external_url;
+
+  if (media.file_path) {
+    const url = supabase.storage.from('activity-media').getPublicUrl(media.file_path).data?.publicUrl;
+    return url || null;
+  }
+
+  return null;
+};
+
 const toLocalDateStr = (d = new Date()) => {
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -245,12 +285,26 @@ const CustomSlide = ({ slide }) => {
 };
 
 /* Activity Slide (Right Panel) */
-const ActivitySlide = ({ session, index }) => {
+const ActivitySlide = ({ session, index, mediaMap }) => {
   if (!session) return null;
   const activity = session?.activities;
   const catColor = activity?.activity_categories?.color_code || '#7C3AED';
   const statusInfo = getStatusStyle(session?.status);
-  const imgUrl = activity?.image_url || DEFAULT_IMAGES[index % DEFAULT_IMAGES.length];
+  const mediaList = mediaMap?.[activity?.id] || [];
+
+  // Priority: explicit thumbnail -> youtube preview -> other media -> fallback stock image
+  const youtubeItem = mediaList.find((m) => (m.media_type || '').toLowerCase() === 'youtube' || !!getYouTubeId(m));
+  const imageLikeItem = mediaList.find((m) => {
+    const t = (m.media_type || '').toLowerCase();
+    return t === 'photo' || t === 'image' || t === 'video' || t === 'website' || t === 'pdf' || !!m.thumbnail_url;
+  });
+
+  const imgUrl =
+    activity?.image_url ||
+    getActivityMediaPreviewUrl(youtubeItem) ||
+    getActivityMediaPreviewUrl(imageLikeItem) ||
+    getActivityMediaPreviewUrl(mediaList[0]) ||
+    DEFAULT_IMAGES[index % DEFAULT_IMAGES.length];
 
   return (
     <motion.div
@@ -510,6 +564,7 @@ const TVDisplayModern = () => {
   const [careHomeId, setCareHomeId] = useState(persistedCareHomeId || authCareHomeId || null);
   const [customSlides, setCustomSlides] = useState([]);
   const [meals, setMeals] = useState([]);
+  const [activityMediaMap, setActivityMediaMap] = useState({});
   const [musicConfig, setMusicConfig] = useState({
     enabled: false,
     source: 'youtube',
@@ -861,6 +916,31 @@ const TVDisplayModern = () => {
       }));
 
       setActivities(normalized);
+
+      // Fetch activity media in a single batch and rank by priority for previews.
+      const activityIds = Array.from(new Set(normalized.map((s) => s.activity_id).filter(Boolean)));
+      if (activityIds.length > 0) {
+        const { data: mediaRows, error: mediaErr } = await supabase
+          .from('activity_media')
+          .select('activity_id, media_type, thumbnail_url, youtube_video_id, external_url, file_path, is_primary, display_order')
+          .in('activity_id', activityIds)
+          .order('is_primary', { ascending: false })
+          .order('display_order', { ascending: true });
+
+        if (!mediaErr) {
+          const grouped = {};
+          for (const row of mediaRows || []) {
+            if (!grouped[row.activity_id]) grouped[row.activity_id] = [];
+            grouped[row.activity_id].push(row);
+          }
+          setActivityMediaMap(grouped);
+        } else {
+          setActivityMediaMap({});
+        }
+      } else {
+        setActivityMediaMap({});
+      }
+
       const fetchedMeals = await fetchMeals(effectiveCareHomeId, today);
       const mealSlideCount = fetchedMeals.length > 0 ? 1 : 0;
       setCurrentSlide((prev) => Math.min(prev, Math.max(0, (normalized.length + mealSlideCount + customSlides.filter(s => s.enabled !== false).length || 1) - 1)));
@@ -1125,6 +1205,7 @@ const TVDisplayModern = () => {
                     key={`activity-${slide.data?.id}`}
                     session={slide.data}
                     index={slide.idx}
+                    mediaMap={activityMediaMap}
                   />
                 );
               })()}
