@@ -2,6 +2,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import Icon from '../../components/AppIcon';
 import supabase from '../../services/supabaseClient';
+import { getStatus } from '../../services/deliveryService';
 import { useAuth } from '../../context/AuthContext';
 
 /* helpers */
@@ -19,6 +20,79 @@ const DEFAULT_IMAGES = [
   'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=800&h=600&fit=crop',
   'https://images.unsplash.com/photo-1511632765486-a01980e01a18?w=800&h=600&fit=crop',
 ];
+
+const FALLBACK_SLIDES = [
+  {
+    id: 'auto-welcome',
+    title: 'Welcome To Today\'s Activities',
+    subtitle: 'A new day means new moments to enjoy',
+    message: 'The schedule is currently clear. New sessions will appear here automatically as soon as they are planned.',
+    category: 'welcome',
+    emoji: '✨',
+  },
+  {
+    id: 'auto-wellbeing',
+    title: 'Wellbeing Spotlight',
+    subtitle: 'Small joyful moments matter',
+    message: 'Try music, light stretching, storytelling, or a shared tea break to keep the day warm, social, and meaningful.',
+    category: 'celebration',
+    emoji: '🌟',
+  },
+  {
+    id: 'auto-community',
+    title: 'Community Connection',
+    subtitle: 'Every hello can brighten a room',
+    message: 'Encourage residents, staff, and visitors to share conversations, smiles, and simple wins throughout the day.',
+    category: 'announcement',
+    emoji: '🤝',
+  },
+  {
+    id: 'auto-refresh',
+    title: 'Live Updates Enabled',
+    subtitle: 'Display refreshes every 2 minutes',
+    message: 'When activities are scheduled, this screen will instantly rotate them with rich visuals and timing details.',
+    category: 'holiday',
+    emoji: '🚀',
+  },
+];
+
+const MEAL_TYPES = ['Breakfast', 'Lunch', 'Supper'];
+
+const getMealTypeMeta = (type) => {
+  const normalized = (type || '').toLowerCase();
+  if (normalized === 'breakfast') return { icon: 'Sunrise', color: '#f59e0b', bg: 'from-amber-500 to-orange-500' };
+  if (normalized === 'lunch') return { icon: 'UtensilsCrossed', color: '#10b981', bg: 'from-emerald-500 to-teal-500' };
+  if (normalized === 'supper') return { icon: 'MoonStar', color: '#6366f1', bg: 'from-indigo-500 to-violet-500' };
+  return { icon: 'UtensilsCrossed', color: '#64748b', bg: 'from-slate-500 to-slate-600' };
+};
+
+const getYouTubeEmbedUrl = (value) => {
+  if (!value) return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+  if (raw.includes('youtube.com/embed/')) return raw;
+  try {
+    const url = new URL(raw);
+    if (url.hostname.includes('youtu.be')) {
+      const id = url.pathname.replace('/', '');
+      return id ? `https://www.youtube.com/embed/${id}` : null;
+    }
+    if (url.hostname.includes('youtube.com')) {
+      const id = url.searchParams.get('v');
+      return id ? `https://www.youtube.com/embed/${id}` : null;
+    }
+  } catch {
+    // ignore parse issues
+  }
+  return null;
+};
+
+const toLocalDateStr = (d = new Date()) => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 const getStatusStyle = (status) => {
   const s = (status || 'scheduled').toLowerCase();
@@ -325,11 +399,107 @@ const ScheduleItem = ({ session, index, isActive }) => {
   );
 };
 
+const MealsOverviewSlide = ({ meals }) => {
+  const orderedMeals = [...(meals || [])].sort((a, b) => MEAL_TYPES.indexOf(a.mealType) - MEAL_TYPES.indexOf(b.mealType));
+
+  const bgForType = (type) => {
+    const normalized = (type || '').toLowerCase();
+    if (normalized === 'breakfast') return 'from-amber-500/25 to-orange-500/20';
+    if (normalized === 'lunch') return 'from-emerald-500/25 to-teal-500/20';
+    if (normalized === 'supper') return 'from-indigo-500/25 to-violet-500/20';
+    return 'from-slate-500/25 to-slate-700/20';
+  };
+
+  return (
+    <motion.div
+      key="meals-overview"
+      initial={{ opacity: 0, x: 80 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -80 }}
+      transition={{ duration: 0.8, ease: 'easeInOut' }}
+      className="absolute inset-0 flex flex-col"
+    >
+      <div className="relative flex-1 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-cyan-950/60 to-indigo-950" />
+        <div className="absolute inset-0 opacity-35" style={{ backgroundImage: 'radial-gradient(circle at 20% 20%, #22d3ee55 0%, transparent 45%), radial-gradient(circle at 80% 30%, #a78bfa55 0%, transparent 45%), radial-gradient(circle at 40% 80%, #34d39955 0%, transparent 45%)' }} />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+
+        <div className="absolute top-6 left-6">
+          <span className="px-4 py-2 rounded-full text-white text-lg font-bold shadow-lg bg-black/45 backdrop-blur-sm inline-flex items-center gap-2">
+            <Icon name="UtensilsCrossed" size={18} />
+            Today's Menu Highlights
+          </span>
+        </div>
+
+        <div className="absolute bottom-0 left-0 right-0 p-8">
+          <motion.h2
+            className="text-white text-5xl font-black mb-4 drop-shadow-xl leading-tight"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+          >
+            Fresh Meals For Today
+          </motion.h2>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-6xl">
+            {orderedMeals.map((meal) => {
+              const meta = getMealTypeMeta(meal.mealType);
+              const sidesText = (meal.sides || []).map((s) => s.name).filter(Boolean).join(' • ');
+              const dessertsText = (meal.desserts || []).map((d) => d.name).filter(Boolean).join(' • ');
+              const mealImage = meal.mainMeal?.image_url;
+              return (
+                <div key={meal.id} className={`group rounded-3xl border border-white/25 bg-gradient-to-br ${bgForType(meal.mealType)} backdrop-blur-md shadow-2xl overflow-hidden`}> 
+                  <div className="relative h-44">
+                    {mealImage ? (
+                      <img src={mealImage} alt={meal.mainMeal?.name || meal.mealType} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-white/15 via-white/5 to-transparent">
+                        <div className="w-20 h-20 rounded-3xl bg-white/20 border border-white/40 flex items-center justify-center backdrop-blur-sm shadow-xl">
+                          <Icon name={meta.icon} size={34} className="text-white" />
+                        </div>
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+                    <div className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-black/45 text-white text-[11px] font-bold inline-flex items-center gap-1.5 border border-white/20">
+                      <Icon name={meta.icon} size={12} />
+                      {meal.mealType}
+                    </div>
+                  </div>
+                  <div className="p-5">
+                    <p className="text-white text-2xl font-black leading-tight mb-2 line-clamp-2">{meal.mainMeal?.name || 'Chef Selection'}</p>
+                    {meal.mainMeal?.description && (
+                      <p className="text-white/80 text-sm line-clamp-2 mb-3">{meal.mainMeal.description}</p>
+                    )}
+                    <div className="rounded-xl border border-white/20 bg-black/15 px-3 py-2">
+                      <p className="text-white/70 text-[11px] uppercase tracking-wider font-semibold mb-1">Sides & Desserts</p>
+                      <p className="text-white/90 text-xs leading-relaxed line-clamp-2">
+                        {sidesText || dessertsText ? [sidesText, dessertsText].filter(Boolean).join(' • ') : 'Chef selected accompaniments for today'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
 /* Main TV Display Component */
 const TV_CHANNEL = 'tv-display-sync';
+const TV_SELECTED_CARE_HOME_KEY = 'tv-selected-care-home-id';
 
 const TVDisplayModern = () => {
   const { careHomeId: authCareHomeId } = useAuth();
+  const persistedCareHomeId = (() => {
+    try {
+      return localStorage.getItem(TV_SELECTED_CARE_HOME_KEY);
+    } catch {
+      return null;
+    }
+  })();
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -337,13 +507,27 @@ const TVDisplayModern = () => {
   const [now, setNow] = useState(new Date());
   const [slideInterval, setSlideInterval] = useState(12);
   const [paused, setPaused] = useState(false);
-  const [careHomeId, setCareHomeId] = useState(authCareHomeId || null);
+  const [careHomeId, setCareHomeId] = useState(persistedCareHomeId || authCareHomeId || null);
   const [customSlides, setCustomSlides] = useState([]);
+  const [meals, setMeals] = useState([]);
+  const [musicConfig, setMusicConfig] = useState({
+    enabled: false,
+    source: 'youtube',
+    volume: 40,
+    youtubeUrl: '',
+    playlistId: null,
+    songs: [],
+  });
+  const [currentSongIndex, setCurrentSongIndex] = useState(0);
+  const [currentSong, setCurrentSong] = useState(null);
+  const [isMusicPlaying, setIsMusicPlaying] = useState(false);
+  const [isLocalMusicPaused, setIsLocalMusicPaused] = useState(false);
   const scheduleRef = useRef(null);
   const channelRef = useRef(null);
   const activitiesRef = useRef([]);
   const fetchRef = useRef(null);
   const broadcastRef = useRef(null);
+  const audioRef = useRef(null);
 
   /* activitiesRef is updated via allSlides effect below */
 
@@ -351,8 +535,9 @@ const TVDisplayModern = () => {
   useEffect(() => {
     if (authCareHomeId && !careHomeId) {
       setCareHomeId(authCareHomeId);
+      try { localStorage.setItem(TV_SELECTED_CARE_HOME_KEY, authCareHomeId); } catch {}
     }
-  }, [authCareHomeId]);
+  }, [authCareHomeId, careHomeId]);
 
   /* Load custom slides from localStorage on mount */
   useEffect(() => {
@@ -394,6 +579,10 @@ const TVDisplayModern = () => {
             break;
           case 'setCareHome':
             setCareHomeId(msg.careHomeId || null);
+            try {
+              if (msg.careHomeId) localStorage.setItem(TV_SELECTED_CARE_HOME_KEY, msg.careHomeId);
+              else localStorage.removeItem(TV_SELECTED_CARE_HOME_KEY);
+            } catch {}
             break;
           case 'setCustomSlides':
             if (Array.isArray(msg.slides)) {
@@ -401,6 +590,21 @@ const TVDisplayModern = () => {
               try { localStorage.setItem('tv-custom-slides', JSON.stringify(msg.slides)); } catch {}
             }
             break;
+          case 'setMusic': {
+            const incoming = msg.music || {};
+            setMusicConfig((prev) => ({
+              ...prev,
+              enabled: !!incoming.enabled,
+              source: incoming.source === 'local' ? 'local' : 'youtube',
+              volume: Number.isFinite(Number(incoming.volume)) ? Math.max(0, Math.min(100, Number(incoming.volume))) : prev.volume,
+              youtubeUrl: incoming.youtubeUrl || '',
+              playlistId: incoming.playlistId || null,
+              songs: Array.isArray(incoming.songs) ? incoming.songs : [],
+            }));
+            setCurrentSongIndex(0);
+            setIsLocalMusicPaused(false);
+            break;
+          }
           case 'ping':
             broadcastRef.current?.();
             break;
@@ -415,11 +619,16 @@ const TVDisplayModern = () => {
   /* Build combined slides list: activities + custom slides */
   const allSlides = useMemo(() => {
     const actSlides = activities.map((s, i) => ({ type: 'activity', data: s, idx: i }));
+    const mealSlides = meals.length > 0 ? [{ type: 'meal', data: meals, idx: 0 }] : [];
     const custSlides = customSlides
       .filter((s) => s.enabled !== false)
       .map((s) => ({ type: 'custom', data: s, idx: null }));
-    return [...actSlides, ...custSlides];
-  }, [activities, customSlides]);
+    const slides = [...actSlides, ...mealSlides, ...custSlides];
+    if (slides.length === 0) {
+      return FALLBACK_SLIDES.map((s, i) => ({ type: 'fallback', data: s, idx: i }));
+    }
+    return slides;
+  }, [activities, meals, customSlides]);
 
   /* Keep total ref updated for BroadcastChannel handler */
   useEffect(() => { activitiesRef.current = allSlides; }, [allSlides]);
@@ -434,6 +643,13 @@ const TVDisplayModern = () => {
         interval: slideInterval,
         careHomeId,
         customSlides,
+        meals,
+        mealSlideCount: meals.length > 0 ? 1 : 0,
+        music: {
+          ...musicConfig,
+          currentSong,
+          isPlaying: isMusicPlaying,
+        },
         activities: activities.map((s) => ({
           id: s.id,
           name: s.activities?.name,
@@ -447,7 +663,7 @@ const TVDisplayModern = () => {
         })),
       });
     } catch { /* ignore */ }
-  }, [currentSlide, allSlides, activities, paused, slideInterval, careHomeId, customSlides]);
+  }, [currentSlide, allSlides, activities, paused, slideInterval, careHomeId, customSlides, meals, musicConfig, currentSong, isMusicPlaying]);
 
   /* keep broadcastRef current */
   useEffect(() => { broadcastRef.current = broadcastStatus; }, [broadcastStatus]);
@@ -460,9 +676,151 @@ const TVDisplayModern = () => {
     return () => clearInterval(id);
   }, []);
 
+  useEffect(() => {
+    const songs = Array.isArray(musicConfig.songs) ? musicConfig.songs : [];
+
+    if (!musicConfig.enabled || musicConfig.source !== 'local' || songs.length === 0) {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+      setCurrentSong(null);
+      setIsMusicPlaying(false);
+      return;
+    }
+
+    if (isLocalMusicPaused) {
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+      setIsMusicPlaying(false);
+      return;
+    }
+
+    const safeIndex = Math.max(0, Math.min(currentSongIndex, songs.length - 1));
+    const song = songs[safeIndex];
+    if (!song?.url) return;
+
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+
+    const audio = new Audio(song.url);
+    audio.volume = (musicConfig.volume || 0) / 100;
+    audioRef.current = audio;
+
+    audio.play()
+      .then(() => {
+        setCurrentSong(song);
+        setIsMusicPlaying(true);
+      })
+      .catch(() => {
+        setCurrentSong(song);
+        setIsMusicPlaying(false);
+      });
+
+    audio.onended = () => {
+      setCurrentSongIndex((prev) => (prev + 1) % songs.length);
+    };
+
+    return () => {
+      audio.pause();
+    };
+  }, [musicConfig.enabled, musicConfig.source, musicConfig.songs, currentSongIndex, musicConfig.volume, isLocalMusicPaused]);
+
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.volume = (musicConfig.volume || 0) / 100;
+    }
+  }, [musicConfig.volume]);
+
+  const fetchMeals = useCallback(async (effectiveCareHomeId, today) => {
+    try {
+      const mealCache = new Map();
+      const getMealById = async (mealId) => {
+        if (!mealId) return null;
+        if (mealCache.has(mealId)) return mealCache.get(mealId);
+        const { data } = await supabase
+          .from('meals')
+          .select('id, name, description, image_url, type')
+          .eq('id', mealId)
+          .single();
+        mealCache.set(mealId, data || null);
+        return data || null;
+      };
+
+      const fetchedMeals = [];
+      for (const mealType of MEAL_TYPES) {
+        const [mainRes, sideRes, dessertRes] = await Promise.all([
+          supabase.rpc('get_scheduled_meal', { p_care_home_id: effectiveCareHomeId, p_date: today, p_meal_type: mealType, p_slot_kind: 'main' }),
+          supabase.rpc('get_scheduled_meal', { p_care_home_id: effectiveCareHomeId, p_date: today, p_meal_type: mealType, p_slot_kind: 'side' }),
+          supabase.rpc('get_scheduled_meal', { p_care_home_id: effectiveCareHomeId, p_date: today, p_meal_type: mealType, p_slot_kind: 'dessert' }),
+        ]);
+
+        const mainId = mainRes?.data?.[0]?.meal_id;
+        if (!mainId) continue;
+
+        const mainMeal = await getMealById(mainId);
+        let sides = await Promise.all((sideRes?.data || []).map((row) => getMealById(row.meal_id)));
+        let desserts = await Promise.all((dessertRes?.data || []).map((row) => getMealById(row.meal_id)));
+
+        let resolvedMainMeal = mainMeal;
+
+        // Match MealManager behavior: apply meal_delivery_status overrides for the day.
+        const status = await getStatus(effectiveCareHomeId, today, mealType);
+        if (status?.changedForAll) {
+          const byId = status.mealsById || {};
+
+          if (status.newMainMealId) {
+            resolvedMainMeal = byId[status.newMainMealId] || await getMealById(status.newMainMealId) || resolvedMainMeal;
+          }
+
+          const sideIds = (status.newSideMealIds && status.newSideMealIds.length > 0)
+            ? status.newSideMealIds
+            : (status.newSideMealId ? [status.newSideMealId] : []);
+          if (sideIds.length > 0) {
+            const overriddenSides = await Promise.all(sideIds.map((id) => Promise.resolve(byId[id] || getMealById(id))));
+            sides = overriddenSides.filter(Boolean);
+          }
+
+          const dessertIds = (status.newDessertIds && status.newDessertIds.length > 0)
+            ? status.newDessertIds
+            : (status.newDessertMealId ? [status.newDessertMealId] : []);
+          if (dessertIds.length > 0) {
+            const overriddenDesserts = await Promise.all(dessertIds.map((id) => Promise.resolve(byId[id] || getMealById(id))));
+            desserts = overriddenDesserts.filter(Boolean);
+          }
+        }
+
+        fetchedMeals.push({
+          id: `meal-${mealType.toLowerCase()}-${today}`,
+          mealType,
+          mainMeal: resolvedMainMeal,
+          sides: sides.filter(Boolean),
+          desserts: desserts.filter(Boolean),
+        });
+      }
+
+      setMeals(fetchedMeals);
+      return fetchedMeals;
+    } catch (mealErr) {
+      console.warn('[TVDisplay] Failed to fetch meals:', mealErr);
+      setMeals([]);
+      return [];
+    }
+  }, []);
+
   const fetchActivities = useCallback(async () => {
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const effectiveCareHomeId = careHomeId || authCareHomeId;
+      if (!effectiveCareHomeId) {
+        setActivities([]);
+        setError(null);
+        return;
+      }
+
+      const today = toLocalDateStr();
 
       let query = supabase
         .from('activity_sessions')
@@ -490,9 +848,8 @@ const TVDisplayModern = () => {
             activity_categories(name, color_code)
           )
         `)
-        .eq('session_date', today);
-
-      if (careHomeId) query = query.eq('care_home_id', careHomeId);
+        .eq('session_date', today)
+        .eq('care_home_id', effectiveCareHomeId);
 
       const { data: sessions, error } = await query.order('start_time', { ascending: true });
 
@@ -504,14 +861,16 @@ const TVDisplayModern = () => {
       }));
 
       setActivities(normalized);
-      setCurrentSlide((prev) => Math.min(prev, Math.max(0, (normalized.length + customSlides.filter(s => s.enabled !== false).length || 1) - 1)));
+      const fetchedMeals = await fetchMeals(effectiveCareHomeId, today);
+      const mealSlideCount = fetchedMeals.length > 0 ? 1 : 0;
+      setCurrentSlide((prev) => Math.min(prev, Math.max(0, (normalized.length + mealSlideCount + customSlides.filter(s => s.enabled !== false).length || 1) - 1)));
     } catch (err) {
       console.error('[TVDisplay] Error fetching activities:', err);
       setError(err.message || 'Failed to load activities');
     } finally {
       setLoading(false);
     }
-  }, [careHomeId, customSlides]);
+  }, [careHomeId, authCareHomeId, customSlides, fetchMeals]);
 
   /* Keep fetch ref current for BroadcastChannel handler */
   useEffect(() => { fetchRef.current = fetchActivities; }, [fetchActivities]);
@@ -548,6 +907,26 @@ const TVDisplayModern = () => {
 
   const dayName = now.toLocaleDateString('en-US', { weekday: 'long' });
   const dateStr = now.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  const youtubeEmbed = getYouTubeEmbedUrl(musicConfig.youtubeUrl);
+  const localSongCount = Array.isArray(musicConfig.songs) ? musicConfig.songs.length : 0;
+
+  const playNextSong = () => {
+    if (localSongCount > 0) {
+      setCurrentSongIndex((prev) => (prev + 1) % localSongCount);
+      setIsLocalMusicPaused(false);
+    }
+  };
+
+  const playPrevSong = () => {
+    if (localSongCount > 0) {
+      setCurrentSongIndex((prev) => (prev - 1 + localSongCount) % localSongCount);
+      setIsLocalMusicPaused(false);
+    }
+  };
+
+  const toggleLocalMusicPlayback = () => {
+    setIsLocalMusicPaused((prev) => !prev);
+  };
 
   return (
     <div data-persist className="fixed inset-0 flex bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 overflow-hidden">
@@ -610,35 +989,69 @@ const TVDisplayModern = () => {
               <div className="w-10 h-10 rounded-full border-3 border-violet-400 border-t-transparent animate-spin" />
               <p className="text-white/50 text-sm">Loading schedule...</p>
             </div>
-          ) : activities.length === 0 && customSlides.filter(s => s.enabled !== false).length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full gap-3">
-              <div className="w-16 h-16 rounded-2xl bg-white/10 flex items-center justify-center">
-                <Icon name="Calendar" size={32} className="text-white/30" />
-              </div>
-              <p className="text-white/50 text-lg font-semibold">No activities today</p>
-            </div>
           ) : (
             <>
-              {activities.map((session, idx) => (
-                <div key={session.id} data-active={idx === currentSlide ? 'true' : 'false'}>
-                  <ScheduleItem session={session} index={idx} isActive={idx === currentSlide} />
-                </div>
-              ))}
-              {customSlides.filter(s => s.enabled !== false).map((slide, idx) => {
-                const slideIdx = activities.length + idx;
+              {allSlides.map((slide, idx) => {
+                const isActive = idx === currentSlide;
+                if (slide.type === 'activity') {
+                  return (
+                    <div key={slide.data.id} data-active={isActive ? 'true' : 'false'}>
+                      <ScheduleItem session={slide.data} index={idx} isActive={isActive} />
+                    </div>
+                  );
+                }
+
+                if (slide.type === 'meal') {
+                  const mealTitle = 'Today\'s Meals';
+                  const mealSubtitle = meals.map((m) => m.mealType).join(' • ');
+                  return (
+                    <div key="menu-overview" data-active={isActive ? 'true' : 'false'}>
+                      <motion.div
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: 0.1 * idx, duration: 0.4 }}
+                        className={`relative rounded-2xl border-2 p-4 transition-all duration-500 ${
+                          isActive
+                            ? 'border-emerald-300/70 bg-emerald-500/20 shadow-lg shadow-emerald-400/20 scale-[1.02]'
+                            : 'border-emerald-300/30 bg-emerald-500/10 hover:bg-emerald-500/20'
+                        }`}
+                      >
+                        {isActive && (
+                          <motion.div
+                            className="absolute -left-1 top-3 bottom-3 w-1.5 rounded-full bg-emerald-300"
+                            animate={{ opacity: [1, 0.5, 1] }}
+                            transition={{ duration: 1.5, repeat: Infinity }}
+                          />
+                        )}
+                        <div className="flex items-center gap-3">
+                          <span className="text-2xl">🍽</span>
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-white text-lg font-bold truncate">{mealTitle}</h4>
+                            <p className="text-white/60 text-sm truncate">{mealSubtitle || 'Breakfast • Lunch • Supper'}</p>
+                          </div>
+                          <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-500/30 text-emerald-200 capitalize">menu</span>
+                        </div>
+                      </motion.div>
+                    </div>
+                  );
+                }
+
+                const badgeClass = slide.type === 'fallback' ? 'bg-sky-500/30 text-sky-300' : 'bg-pink-500/30 text-pink-300';
+                const badgeText = slide.type === 'fallback' ? 'auto' : (slide.data.category || 'custom');
+
                 return (
-                  <div key={slide.id} data-active={slideIdx === currentSlide ? 'true' : 'false'}>
+                  <div key={slide.data.id} data-active={isActive ? 'true' : 'false'}>
                     <motion.div
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.1 * slideIdx, duration: 0.4 }}
+                      transition={{ delay: 0.1 * idx, duration: 0.4 }}
                       className={`relative rounded-2xl border-2 p-4 transition-all duration-500 ${
-                        slideIdx === currentSlide
+                        isActive
                           ? 'border-white/60 bg-white/20 shadow-lg shadow-white/10 scale-[1.02]'
                           : 'border-white/10 bg-white/5 hover:bg-white/10'
                       }`}
                     >
-                      {slideIdx === currentSlide && (
+                      {isActive && (
                         <motion.div
                           className="absolute -left-1 top-3 bottom-3 w-1.5 rounded-full bg-white"
                           animate={{ opacity: [1, 0.5, 1] }}
@@ -646,12 +1059,12 @@ const TVDisplayModern = () => {
                         />
                       )}
                       <div className="flex items-center gap-3">
-                        <span className="text-2xl">{slide.emoji || '✨'}</span>
+                        <span className="text-2xl">{slide.data.emoji || '✨'}</span>
                         <div className="flex-1 min-w-0">
-                          <h4 className="text-white text-lg font-bold truncate">{slide.title}</h4>
-                          {slide.subtitle && <p className="text-white/50 text-sm truncate">{slide.subtitle}</p>}
+                          <h4 className="text-white text-lg font-bold truncate">{slide.data.title}</h4>
+                          {slide.data.subtitle && <p className="text-white/50 text-sm truncate">{slide.data.subtitle}</p>}
                         </div>
-                        <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-pink-500/30 text-pink-300 capitalize">{slide.category || 'custom'}</span>
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full capitalize ${badgeClass}`}>{badgeText}</span>
                       </div>
                     </motion.div>
                   </div>
@@ -701,8 +1114,11 @@ const TVDisplayModern = () => {
               {(() => {
                 const slide = allSlides[currentSlide] || allSlides[0];
                 if (!slide) return null;
-                if (slide.type === 'custom') {
+                if (slide.type === 'custom' || slide.type === 'fallback') {
                   return <CustomSlide key={`custom-${slide.data.id}`} slide={slide.data} />;
+                }
+                if (slide.type === 'meal') {
+                  return <MealsOverviewSlide key="meal-overview" meals={slide.data} />;
                 }
                 return (
                   <ActivitySlide
@@ -735,10 +1151,44 @@ const TVDisplayModern = () => {
                         ? 'w-8 h-3 bg-white shadow-lg'
                         : s.type === 'custom'
                         ? 'w-3 h-3 bg-pink-400/60 hover:bg-pink-300'
+                        : s.type === 'fallback'
+                        ? 'w-3 h-3 bg-sky-400/70 hover:bg-sky-300'
+                        : s.type === 'meal'
+                        ? 'w-3 h-3 bg-emerald-400/70 hover:bg-emerald-300'
                         : 'w-3 h-3 bg-white/40 hover:bg-white/60'
                     }`}
                   />
                 ))}
+              </div>
+            )}
+
+            {musicConfig.enabled && (
+              <div className="absolute bottom-6 left-6 z-20 max-w-[420px] backdrop-blur-md bg-black/45 px-4 py-3 rounded-2xl border border-white/20 flex items-center gap-3">
+                <Icon name="Music" size={16} className="text-emerald-300" />
+                <div className="min-w-0">
+                  <p className="text-white text-sm font-semibold truncate max-w-[200px]">
+                    {musicConfig.source === 'local' ? (currentSong?.name || 'Local Playlist') : 'YouTube Music'}
+                  </p>
+                  <p className="text-white/70 text-xs truncate max-w-[200px]">
+                    {musicConfig.source === 'local' ? (currentSong?.artist || `${localSongCount} tracks`) : 'Background stream'}
+                  </p>
+                </div>
+
+                {musicConfig.source === 'local' ? (
+                  <div className="flex items-center gap-1">
+                    <button onClick={playPrevSong} className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center" title="Previous">
+                      <Icon name="SkipBack" size={14} />
+                    </button>
+                    <button onClick={toggleLocalMusicPlayback} className="w-8 h-8 rounded-lg bg-emerald-500/70 hover:bg-emerald-500 text-white flex items-center justify-center" title={isLocalMusicPaused ? 'Play' : 'Pause'}>
+                      <Icon name={isLocalMusicPaused ? 'Play' : 'Pause'} size={14} />
+                    </button>
+                    <button onClick={playNextSong} className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center" title="Next">
+                      <Icon name="SkipForward" size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <span className="text-[11px] px-2 py-1 rounded-lg bg-red-500/30 text-red-100">Control from panel</span>
+                )}
               </div>
             )}
 
@@ -748,6 +1198,15 @@ const TVDisplayModern = () => {
               </span>
             </div>
           </>
+        )}
+
+        {musicConfig.enabled && musicConfig.source === 'youtube' && youtubeEmbed && (
+          <iframe
+            title="TV background music"
+            src={`${youtubeEmbed}?autoplay=1&loop=1&playlist=${youtubeEmbed.split('/').pop()}&controls=0&modestbranding=1`}
+            allow="autoplay; encrypted-media"
+            className="hidden"
+          />
         )}
       </div>
     </div>

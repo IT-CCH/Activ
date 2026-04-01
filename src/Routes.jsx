@@ -28,6 +28,41 @@ import ActivityTVDisplay from './pages/tv-display/ActivityTVDisplay';
 import ProtectedRoute from './components/ProtectedRoute';
 
 const Routes = () => {
+  const RouteTitleSync = () => {
+    const location = useLocation();
+
+    useEffect(() => {
+      const path = location.pathname;
+      const routeTitles = [
+        { match: '/dashboard', title: 'Dashboard' },
+        { match: '/calendar', title: 'Activity Calendar' },
+        { match: '/activities', title: 'Activities' },
+        { match: '/sessions', title: 'Activity Sessions' },
+        { match: '/enrollments', title: 'Enrollments' },
+        { match: '/expenses', title: 'Activity Expenses' },
+        { match: '/audit-logs', title: 'Audit Logs' },
+        { match: '/admin/dashboard', title: 'Admin Dashboard' },
+        { match: '/admin/user-management', title: 'User Management' },
+        { match: '/admin/care-home-management', title: 'Care Home Management' },
+        { match: '/admin/resident-management', title: 'Resident Management' },
+        { match: '/super-admin', title: 'Super Admin Dashboard' },
+        { match: '/staff/dashboard', title: 'Staff Dashboard' },
+        { match: '/staff/residents', title: 'Staff Residents' },
+        { match: '/tv-display-control', title: 'TV Display Control Panel' },
+        { match: '/tv-display/activity', title: 'TV Activity Display' },
+        { match: '/tv-display', title: 'TV Display' },
+        { match: '/help', title: 'Help & Documentation' },
+        { match: '/login', title: 'Login' },
+        { match: '/reset-password', title: 'Reset Password' },
+      ];
+
+      const matched = routeTitles.find((entry) => path === entry.match || path.startsWith(`${entry.match}/`));
+      document.title = `${matched?.title || 'Activity Planner'} - Activity Planner`;
+    }, [location.pathname]);
+
+    return null;
+  };
+
   // Global cleanup component: runs on route change to remove any stuck overlays/backdrops
   const OverlayCleanup = () => {
     const location = useLocation();
@@ -49,6 +84,7 @@ const Routes = () => {
     <BrowserRouter>
       <ErrorBoundary>
       <ScrollToTop />
+      <RouteTitleSync />
       <OverlayCleanup />
       <RouterRoutes>
         {/* Authentication Routes */}

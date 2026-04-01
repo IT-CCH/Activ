@@ -2,10 +2,19 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Header from '../../components/navigation/Header';
 import Icon from '../../components/AppIcon';
+import MusicLibraryModal from '../../components/MusicLibraryModal';
 import supabase from '../../services/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 
 const TV_CHANNEL = 'tv-display-sync';
+const TV_SELECTED_CARE_HOME_KEY = 'tv-selected-care-home-id';
+
+const toLocalDateStr = (d = new Date()) => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 const formatTime = (t) => {
   if (!t) return '';
@@ -23,7 +32,7 @@ const getStatusStyle = (status) => {
 };
 
 const TVDisplayControlPanel = () => {
-  const { isCareHomeManager, careHomeId: authCareHomeId } = useAuth();
+  const { isCareHomeManager, isSuperAdmin, careHomeId: authCareHomeId, organizationId } = useAuth();
   const [connected, setConnected] = useState(false);
   const [tvStatus, setTvStatus] = useState(null);
   const [careHomes, setCareHomes] = useState([]);
@@ -32,6 +41,13 @@ const TVDisplayControlPanel = () => {
   const [localActivities, setLocalActivities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [customSlides, setCustomSlides] = useState([]);
+  const [musicEnabled, setMusicEnabled] = useState(false);
+  const [musicSource, setMusicSource] = useState('youtube');
+  const [musicVolume, setMusicVolume] = useState(40);
+  const [youtubeUrl, setYoutubeUrl] = useState('');
+  const [selectedPlaylist, setSelectedPlaylist] = useState(null);
+  const [playlistSongs, setPlaylistSongs] = useState([]);
+  const [showMusicLibrary, setShowMusicLibrary] = useState(false);
   const [showSlideEditor, setShowSlideEditor] = useState(false);
   const [editingSlide, setEditingSlide] = useState(null);
   const channelRef = useRef(null);
@@ -43,6 +59,23 @@ const TVDisplayControlPanel = () => {
       const saved = localStorage.getItem('tv-custom-slides');
       if (saved) setCustomSlides(JSON.parse(saved));
     } catch { /* ignore */ }
+  }, []);
+
+  /* Load persisted music config */
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('tv-music-config');
+      if (!saved) return;
+      const parsed = JSON.parse(saved);
+      setMusicEnabled(!!parsed.enabled);
+      setMusicSource(parsed.source === 'local' ? 'local' : 'youtube');
+      setMusicVolume(Number.isFinite(Number(parsed.volume)) ? Number(parsed.volume) : 40);
+      setYoutubeUrl(parsed.youtubeUrl || '');
+      setSelectedPlaylist(parsed.playlist || null);
+      setPlaylistSongs(Array.isArray(parsed.songs) ? parsed.songs : []);
+    } catch {
+      // ignore invalid local storage
+    }
   }, []);
 
   /* BroadcastChannel setup */
@@ -89,28 +122,42 @@ const TVDisplayControlPanel = () => {
   useEffect(() => {
     const fetchCareHomes = async () => {
       try {
-        const { data } = await supabase
+        let query = supabase
           .from('care_homes')
-          .select('id, name')
+          .select('id, name, organization_id')
           .order('name', { ascending: true });
+
+        if (!isSuperAdmin && organizationId) {
+          query = query.eq('organization_id', organizationId);
+        }
+
+        if (isCareHomeManager && authCareHomeId) {
+          query = query.eq('id', authCareHomeId);
+        }
+
+        const { data } = await query;
         setCareHomes(data || []);
         // Auto-select user's care home or first available for non-managers
         if (!isCareHomeManager && !selectedCareHome) {
-          const defaultId = authCareHomeId || (data && data.length > 0 ? data[0].id : '');
+          const savedCareHomeId = localStorage.getItem(TV_SELECTED_CARE_HOME_KEY);
+          const validSavedId = (data || []).some((ch) => ch.id === savedCareHomeId) ? savedCareHomeId : '';
+          const defaultId = validSavedId || authCareHomeId || (data && data.length > 0 ? data[0].id : '');
           if (defaultId) {
             setSelectedCareHome(defaultId);
+            try { localStorage.setItem(TV_SELECTED_CARE_HOME_KEY, defaultId); } catch {}
             send({ type: 'setCareHome', careHomeId: defaultId });
           }
         }
       } catch { /* ignore */ }
     };
     fetchCareHomes();
-  }, []);
+  }, [isSuperAdmin, organizationId, isCareHomeManager, authCareHomeId, selectedCareHome, send]);
 
   /* Lock care home managers to their own care home */
   useEffect(() => {
     if (isCareHomeManager && authCareHomeId) {
       setSelectedCareHome(authCareHomeId);
+      try { localStorage.setItem(TV_SELECTED_CARE_HOME_KEY, authCareHomeId); } catch {}
       send({ type: 'setCareHome', careHomeId: authCareHomeId });
     }
   }, [isCareHomeManager, authCareHomeId, send]);
@@ -118,7 +165,12 @@ const TVDisplayControlPanel = () => {
   /* Fetch activities locally for display in control panel */
   const fetchActivities = useCallback(async () => {
     try {
-      const today = new Date().toISOString().split('T')[0];
+      if (!selectedCareHome) {
+        setLocalActivities([]);
+        return;
+      }
+
+      const today = toLocalDateStr();
       let query = supabase
         .from('activity_sessions')
         .select(`
@@ -127,9 +179,8 @@ const TVDisplayControlPanel = () => {
           activities (id, name, description, image_url, duration_minutes, location,
             activity_categories(name, color_code))
         `)
-        .eq('session_date', today);
-
-      if (selectedCareHome) query = query.eq('care_home_id', selectedCareHome);
+        .eq('session_date', today)
+        .eq('care_home_id', selectedCareHome);
 
       const { data: sessions, error } = await query.order('start_time', { ascending: true });
       if (error) throw error;
@@ -167,8 +218,77 @@ const TVDisplayControlPanel = () => {
 
   const updateCareHome = (id) => {
     setSelectedCareHome(id);
+    try {
+      if (id) localStorage.setItem(TV_SELECTED_CARE_HOME_KEY, id);
+      else localStorage.removeItem(TV_SELECTED_CARE_HOME_KEY);
+    } catch {}
     send({ type: 'setCareHome', careHomeId: id || null });
   };
+
+  const buildAndSendMusicConfig = useCallback((override = {}) => {
+    const payload = {
+      enabled: override.enabled ?? musicEnabled,
+      source: override.source ?? musicSource,
+      volume: override.volume ?? musicVolume,
+      youtubeUrl: override.youtubeUrl ?? youtubeUrl,
+      playlistId: override.playlistId ?? selectedPlaylist?.id ?? null,
+      songs: override.songs ?? playlistSongs,
+    };
+    try {
+      localStorage.setItem('tv-music-config', JSON.stringify({
+        ...payload,
+        playlist: override.playlist ?? selectedPlaylist ?? null,
+      }));
+    } catch {
+      // ignore local storage errors
+    }
+    send({ type: 'setMusic', music: payload });
+  }, [musicEnabled, musicSource, musicVolume, youtubeUrl, selectedPlaylist, playlistSongs, send]);
+
+  const loadPlaylistSongs = useCallback(async (playlistId) => {
+    const { data, error } = await supabase
+      .from('playlist_songs')
+      .select('position, songs(*)')
+      .eq('playlist_id', playlistId)
+      .order('position', { ascending: true });
+
+    if (error) throw error;
+
+    const songs = (data || [])
+      .map((row) => row.songs)
+      .filter(Boolean)
+      .map((song) => {
+        let url = null;
+        if (song.file_path) {
+          const publicUrl = supabase.storage.from('songs').getPublicUrl(song.file_path).data?.publicUrl;
+          url = publicUrl || null;
+        }
+        return {
+          id: song.id,
+          name: song.name,
+          artist: song.artist,
+          url,
+        };
+      })
+      .filter((s) => !!s.url);
+
+    return songs;
+  }, []);
+
+  const handleSelectPlaylist = useCallback(async (playlist) => {
+    try {
+      const songs = await loadPlaylistSongs(playlist.id);
+      setSelectedPlaylist(playlist);
+      setPlaylistSongs(songs);
+      buildAndSendMusicConfig({ playlistId: playlist.id, songs, playlist });
+    } catch (err) {
+      console.error('Failed to load playlist songs:', err);
+    }
+  }, [loadPlaylistSongs, buildAndSendMusicConfig]);
+
+  useEffect(() => {
+    buildAndSendMusicConfig();
+  }, [musicEnabled, musicSource, musicVolume, youtubeUrl, playlistSongs, selectedPlaylist, buildAndSendMusicConfig]);
 
   const openTVDisplay = () => {
     window.open('/tv-display', '_blank', 'noopener,noreferrer');
@@ -228,6 +348,9 @@ const TVDisplayControlPanel = () => {
     categoryColor: s.activities?.activity_categories?.color_code,
     imageUrl: s.activities?.image_url,
   }));
+  const displayMeals = tvStatus?.meals ?? [];
+  const mealSlideCount = tvStatus?.mealSlideCount ?? (displayMeals.length > 0 ? 1 : 0);
+  const tvMusic = tvStatus?.music ?? null;
 
   const stats = {
     total: localActivities.length,
@@ -398,6 +521,95 @@ const TVDisplayControlPanel = () => {
               </div>
             )}
 
+            {/* Music Player Controls */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">
+              <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider mb-4 flex items-center gap-2">
+                <Icon name="Music" size={16} className="text-fuchsia-500" />
+                Music Player
+              </h3>
+
+              <label className="flex items-center justify-between p-3 rounded-xl border border-gray-200 bg-gray-50 mb-4">
+                <span className="text-sm font-semibold text-gray-700">Enable Background Music</span>
+                <button
+                  onClick={() => setMusicEnabled((p) => !p)}
+                  className={`relative inline-flex h-6 w-12 items-center rounded-full transition-colors ${musicEnabled ? 'bg-emerald-500' : 'bg-gray-300'}`}
+                >
+                  <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${musicEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
+              </label>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Source</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => setMusicSource('youtube')}
+                      className={`px-3 py-2 rounded-lg text-sm font-semibold border transition-all ${musicSource === 'youtube' ? 'bg-red-50 border-red-300 text-red-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                    >
+                      YouTube
+                    </button>
+                    <button
+                      onClick={() => setMusicSource('local')}
+                      className={`px-3 py-2 rounded-lg text-sm font-semibold border transition-all ${musicSource === 'local' ? 'bg-fuchsia-50 border-fuchsia-300 text-fuchsia-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                    >
+                      Local Playlist
+                    </button>
+                  </div>
+                </div>
+
+                {musicSource === 'youtube' && (
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">YouTube URL</label>
+                    <input
+                      type="text"
+                      value={youtubeUrl}
+                      onChange={(e) => setYoutubeUrl(e.target.value)}
+                      placeholder="https://www.youtube.com/watch?v=..."
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                    />
+                  </div>
+                )}
+
+                {musicSource === 'local' && (
+                  <div className="space-y-2">
+                    <button
+                      onClick={() => setShowMusicLibrary(true)}
+                      className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-fuchsia-50 text-fuchsia-700 border border-fuchsia-200 hover:bg-fuchsia-100 transition-colors text-sm font-semibold"
+                    >
+                      <Icon name="Music" size={14} />
+                      {selectedPlaylist ? 'Change Playlist' : 'Choose Playlist'}
+                    </button>
+                    <div className="text-xs text-gray-500 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                      {selectedPlaylist
+                        ? `${selectedPlaylist.name} (${playlistSongs.length} songs)`
+                        : 'No playlist selected'}
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Volume</label>
+                    <span className="text-xs font-bold text-fuchsia-600">{musicVolume}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={musicVolume}
+                    onChange={(e) => setMusicVolume(parseInt(e.target.value, 10))}
+                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-fuchsia-500"
+                  />
+                </div>
+
+                {tvMusic?.enabled && (
+                  <div className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+                    Live: {tvMusic.source === 'local' ? (tvMusic.currentSong?.name || 'Local playlist') : 'YouTube'}
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* Quick Actions */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">
               <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider mb-3 flex items-center gap-2">
@@ -473,21 +685,25 @@ const TVDisplayControlPanel = () => {
                     {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                   </p>
                   <div className="mt-3 w-full space-y-1.5">
-                    {displayActivities.slice(0, 4).map((a, i) => (
+                    {[...displayActivities.map((a) => ({ type: 'activity', data: a })), ...(displayMeals.length > 0 ? [{ type: 'meal', data: displayMeals }] : [])]
+                      .slice(0, 4)
+                      .map((item, i) => (
                       <div
-                        key={a.id || i}
+                        key={(item.data.id || `${item.type}-${i}`)}
                         className={`px-2 py-1 rounded text-[9px] truncate ${
                           i === currentSlide
                             ? 'bg-white/20 text-white font-bold border border-white/30'
                             : 'bg-white/5 text-white/50'
                         }`}
                       >
-                        {formatTime(a.start_time)} — {a.name || 'Activity'}
+                        {item.type === 'activity'
+                          ? `${formatTime(item.data.start_time)} — ${item.data.name || 'Activity'}`
+                          : `🍽 Meals — ${(item.data || []).map((m) => m.mealType).join(' • ') || 'Breakfast • Lunch • Supper'}`}
                       </div>
                     ))}
-                    {displayActivities.length > 4 && (
+                    {(displayActivities.length + mealSlideCount) > 4 && (
                       <p className="text-white/30 text-[8px] text-center">
-                        +{displayActivities.length - 4} more
+                        +{(displayActivities.length + mealSlideCount) - 4} more
                       </p>
                     )}
                   </div>
@@ -498,10 +714,13 @@ const TVDisplayControlPanel = () => {
                   {(() => {
                     // Determine what's showing on the current slide
                     const actCount = displayActivities.length;
+                    const mealCount = mealSlideCount;
                     const enabledCust = customSlides.filter(s => s.enabled !== false);
-                    const isCustomSlide = currentSlide >= actCount && enabledCust[currentSlide - actCount];
-                    const customSlideData = isCustomSlide ? enabledCust[currentSlide - actCount] : null;
-                    const actSlideData = !isCustomSlide && displayActivities[currentSlide] ? displayActivities[currentSlide] : null;
+                    const isMealSlide = currentSlide >= actCount && currentSlide < (actCount + mealCount);
+                    const mealSlideData = isMealSlide ? displayMeals : null;
+                    const isCustomSlide = currentSlide >= (actCount + mealCount) && enabledCust[currentSlide - actCount - mealCount];
+                    const customSlideData = isCustomSlide ? enabledCust[currentSlide - actCount - mealCount] : null;
+                    const actSlideData = (!isCustomSlide && !isMealSlide) && displayActivities[currentSlide] ? displayActivities[currentSlide] : null;
 
                     if (customSlideData) {
                       const previewBg = {
@@ -517,6 +736,18 @@ const TVDisplayControlPanel = () => {
                           <span className="text-3xl mb-1">{customSlideData.emoji || '\u2728'}</span>
                           <p className="text-white text-sm font-bold text-center px-3 leading-tight">{customSlideData.title}</p>
                           {customSlideData.subtitle && <p className="text-white/80 text-[10px] text-center px-3 mt-0.5">{customSlideData.subtitle}</p>}
+                        </div>
+                      );
+                    }
+
+                    if (mealSlideData) {
+                      return (
+                        <div className="absolute inset-0 bg-gradient-to-br from-emerald-700 via-teal-700 to-cyan-700 flex flex-col items-center justify-center p-4">
+                          <span className="text-4xl mb-2">🍽</span>
+                          <p className="text-white text-sm font-black text-center">Today's Meals</p>
+                          <p className="text-white/90 text-xs font-semibold text-center mt-1 line-clamp-2">
+                            {(mealSlideData || []).map((m) => m.mealType).join(' • ') || 'Breakfast • Lunch • Supper'}
+                          </p>
                         </div>
                       );
                     }
@@ -767,7 +998,7 @@ const TVDisplayControlPanel = () => {
               ) : (
                 <div className="divide-y divide-gray-100 max-h-[400px] overflow-y-auto">
                   {customSlides.map((slide, idx) => {
-                    const slideIdx = localActivities.length + idx;
+                    const slideIdx = (displayActivities.length + mealSlideCount) + idx;
                     const isShowing = slideIdx === currentSlide && slide.enabled !== false;
                     return (
                       <div
@@ -843,6 +1074,13 @@ const TVDisplayControlPanel = () => {
           />
         )}
       </AnimatePresence>
+
+      <MusicLibraryModal
+        isOpen={showMusicLibrary}
+        onClose={() => setShowMusicLibrary(false)}
+        onSelectPlaylist={handleSelectPlaylist}
+        currentPlaylistId={selectedPlaylist?.id || null}
+      />
     </div>
   );
 };

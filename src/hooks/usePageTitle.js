@@ -2,17 +2,11 @@ import { useEffect } from 'react';
 
 const usePageTitle = (title) => {
   useEffect(() => {
-    const originalTitle = document.title;
-    
     if (title) {
-      document.title = `${title} - Meal Manager`;
+      document.title = `${title} - Activity Planner`;
     } else {
-      document.title = 'Meal Manager by Capital Care Homes';
+      document.title = 'Activity Planner';
     }
-    
-    return () => {
-      document.title = originalTitle;
-    };
   }, [title]);
 };
 
