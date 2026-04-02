@@ -66,6 +66,25 @@ const getMealTypeMeta = (type) => {
   return { icon: 'UtensilsCrossed', color: '#64748b', bg: 'from-slate-500 to-slate-600' };
 };
 
+const getMealFallbackImage = (type) => {
+  const normalized = (type || '').toLowerCase();
+  if (normalized === 'breakfast') return 'https://images.unsplash.com/photo-1525351484163-7529414344d8?w=1400&h=1000&fit=crop';
+  if (normalized === 'lunch') return 'https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?w=1400&h=1000&fit=crop';
+  if (normalized === 'supper') return 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1400&h=1000&fit=crop';
+  return 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=1400&h=1000&fit=crop';
+};
+
+const getMealItemImage = (item, mealType) => item?.image_url || getMealFallbackImage(item?.type || mealType);
+
+const getMealGalleryItems = (meal, limit = 4) => {
+  const items = [
+    ...(meal?.sides || []).map((item) => ({ ...item, slotLabel: 'Side' })),
+    ...(meal?.desserts || []).map((item) => ({ ...item, slotLabel: 'Dessert' })),
+  ].filter(Boolean);
+
+  return items.slice(0, limit);
+};
+
 const getYouTubeEmbedUrl = (value) => {
   if (!value) return null;
   const raw = String(value).trim();
@@ -455,14 +474,11 @@ const ScheduleItem = ({ session, index, isActive }) => {
 
 const MealsOverviewSlide = ({ meals }) => {
   const orderedMeals = [...(meals || [])].sort((a, b) => MEAL_TYPES.indexOf(a.mealType) - MEAL_TYPES.indexOf(b.mealType));
-
-  const bgForType = (type) => {
-    const normalized = (type || '').toLowerCase();
-    if (normalized === 'breakfast') return 'from-amber-500/25 to-orange-500/20';
-    if (normalized === 'lunch') return 'from-emerald-500/25 to-teal-500/20';
-    if (normalized === 'supper') return 'from-indigo-500/25 to-violet-500/20';
-    return 'from-slate-500/25 to-slate-700/20';
-  };
+  const mealGridClass = orderedMeals.length <= 1
+    ? 'grid-cols-1 max-w-[42rem]'
+    : orderedMeals.length === 2
+    ? 'grid-cols-2 max-w-[96rem]'
+    : 'grid-cols-3 max-w-[110rem]';
 
   return (
     <motion.div
@@ -474,66 +490,139 @@ const MealsOverviewSlide = ({ meals }) => {
       className="absolute inset-0 flex flex-col"
     >
       <div className="relative flex-1 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-cyan-950/60 to-indigo-950" />
-        <div className="absolute inset-0 opacity-35" style={{ backgroundImage: 'radial-gradient(circle at 20% 20%, #22d3ee55 0%, transparent 45%), radial-gradient(circle at 80% 30%, #a78bfa55 0%, transparent 45%), radial-gradient(circle at 40% 80%, #34d39955 0%, transparent 45%)' }} />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-br from-[#06131a] via-[#0c1f2d] to-[#111827]" />
+        <div className="absolute inset-0 opacity-45" style={{ backgroundImage: 'radial-gradient(circle at 18% 18%, rgba(16,185,129,0.28) 0%, transparent 42%), radial-gradient(circle at 78% 24%, rgba(56,189,248,0.22) 0%, transparent 38%), radial-gradient(circle at 50% 82%, rgba(245,158,11,0.16) 0%, transparent 34%)' }} />
+        <div className="absolute inset-0 bg-[linear-gradient(to_bottom,rgba(2,6,23,0.12),rgba(2,6,23,0.4),rgba(2,6,23,0.92))]" />
 
-        <div className="absolute top-6 left-6">
-          <span className="px-4 py-2 rounded-full text-white text-lg font-bold shadow-lg bg-black/45 backdrop-blur-sm inline-flex items-center gap-2">
+        <div className="absolute top-6 left-6 z-10">
+          <span className="px-4 py-2 rounded-full text-white text-lg font-bold shadow-lg bg-slate-950/70 backdrop-blur-md inline-flex items-center gap-2 border border-emerald-300/20">
             <Icon name="UtensilsCrossed" size={18} />
             Today's Menu Highlights
           </span>
         </div>
 
-        <div className="absolute bottom-0 left-0 right-0 p-8">
-          <motion.h2
-            className="text-white text-5xl font-black mb-4 drop-shadow-xl leading-tight"
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          {[...Array(8)].map((_, idx) => (
+            <motion.div
+              key={`meal-orb-${idx}`}
+              className="absolute rounded-full bg-white/10 blur-3xl"
+              style={{
+                width: 220 + (idx * 18),
+                height: 220 + (idx * 18),
+                left: `${8 + (idx * 11)}%`,
+                top: `${10 + ((idx % 3) * 24)}%`,
+              }}
+              animate={{
+                x: [0, 18 - idx, 0],
+                y: [0, idx % 2 === 0 ? -16 : 16, 0],
+                opacity: [0.1, 0.22, 0.1],
+              }}
+              transition={{ duration: 8 + idx, repeat: Infinity, ease: 'easeInOut' }}
+            />
+          ))}
+        </div>
+
+        <div className="absolute inset-0 p-8 pt-24 flex flex-col">
+          <motion.div
+            className="mb-6 max-w-5xl relative z-10"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
+            transition={{ delay: 0.25 }}
           >
-            Fresh Meals For Today
-          </motion.h2>
+            <h2 className="text-white text-6xl font-black mb-3 drop-shadow-xl leading-tight">
+              Today's Meals
+            </h2>
+            <p className="text-emerald-50 text-2xl font-semibold drop-shadow-md">
+              {orderedMeals.map((meal) => meal.mealType).join(' • ') || 'Breakfast • Lunch • Supper'}
+            </p>
+          </motion.div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-6xl">
-            {orderedMeals.map((meal) => {
-              const meta = getMealTypeMeta(meal.mealType);
-              const sidesText = (meal.sides || []).map((s) => s.name).filter(Boolean).join(' • ');
-              const dessertsText = (meal.desserts || []).map((d) => d.name).filter(Boolean).join(' • ');
-              const mealImage = meal.mainMeal?.image_url;
-              return (
-                <div key={meal.id} className={`group rounded-3xl border border-white/25 bg-gradient-to-br ${bgForType(meal.mealType)} backdrop-blur-md shadow-2xl overflow-hidden`}> 
-                  <div className="relative h-44">
-                    {mealImage ? (
-                      <img src={mealImage} alt={meal.mainMeal?.name || meal.mealType} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-white/15 via-white/5 to-transparent">
-                        <div className="w-20 h-20 rounded-3xl bg-white/20 border border-white/40 flex items-center justify-center backdrop-blur-sm shadow-xl">
-                          <Icon name={meta.icon} size={34} className="text-white" />
+          <div className={`grid ${mealGridClass} gap-5 flex-1 min-h-0 w-full mx-auto relative z-10`}>
+            {orderedMeals.map((meal, idx) => {
+                const meta = getMealTypeMeta(meal.mealType);
+                const mealImage = getMealItemImage(meal.mainMeal, meal.mealType);
+                const accompaniments = [
+                  ...(meal.sides || []).map((s) => s.name).filter(Boolean),
+                  ...(meal.desserts || []).map((d) => d.name).filter(Boolean),
+                ].slice(0, 4);
+                const galleryItems = getMealGalleryItems(meal, 4);
+                const sideNames = (meal.sides || []).map((s) => s.name).filter(Boolean);
+                const dessertNames = (meal.desserts || []).map((d) => d.name).filter(Boolean);
+
+                return (
+                  <motion.div
+                    key={meal.id}
+                    initial={{ opacity: 0, y: 40, scale: 0.96 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    transition={{ delay: 0.35 + (idx * 0.12), duration: 0.65, ease: 'easeOut' }}
+                    className="rounded-[2rem] overflow-hidden border border-slate-200/12 bg-slate-950/55 backdrop-blur-xl shadow-[0_24px_90px_rgba(0,0,0,0.45)] relative min-h-[36rem] flex flex-col"
+                  >
+                    <motion.div
+                      className="absolute inset-0 opacity-0 bg-emerald-300/10"
+                      animate={{ opacity: [0.03, 0.08, 0.03] }}
+                      transition={{ duration: 4 + idx, repeat: Infinity, ease: 'easeInOut' }}
+                    />
+                    <div className="relative h-[44%] min-h-[18rem]">
+                        <img src={mealImage} alt={meal.mainMeal?.name || meal.mealType} className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-[linear-gradient(to_top,rgba(2,6,23,0.96),rgba(2,6,23,0.34),rgba(2,6,23,0.04))]" />
+                        <div className="absolute left-4 top-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/95 border border-slate-900/10 text-slate-950 text-sm font-black backdrop-blur-md shadow-lg">
+                          <Icon name={meta.icon} size={15} />
+                          {meal.mealType}
+                        </div>
+                        <div className="absolute bottom-0 left-0 right-0 p-5">
+                          <p className="text-emerald-200 text-xs font-black uppercase tracking-[0.25em] mb-2">Today's Feature</p>
+                          <h3 className="text-white text-4xl font-black leading-tight line-clamp-2 drop-shadow-xl">
+                            {meal.mainMeal?.name || 'Chef Selection'}
+                          </h3>
                         </div>
                       </div>
-                    )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-                    <div className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-black/45 text-white text-[11px] font-bold inline-flex items-center gap-1.5 border border-white/20">
-                      <Icon name={meta.icon} size={12} />
-                      {meal.mealType}
-                    </div>
-                  </div>
-                  <div className="p-5">
-                    <p className="text-white text-2xl font-black leading-tight mb-2 line-clamp-2">{meal.mainMeal?.name || 'Chef Selection'}</p>
-                    {meal.mainMeal?.description && (
-                      <p className="text-white/80 text-sm line-clamp-2 mb-3">{meal.mainMeal.description}</p>
-                    )}
-                    <div className="rounded-xl border border-white/20 bg-black/15 px-3 py-2">
-                      <p className="text-white/70 text-[11px] uppercase tracking-wider font-semibold mb-1">Sides & Desserts</p>
-                      <p className="text-white/90 text-xs leading-relaxed line-clamp-2">
-                        {sidesText || dessertsText ? [sidesText, dessertsText].filter(Boolean).join(' • ') : 'Chef selected accompaniments for today'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+                      <div className="p-5 flex flex-col bg-gradient-to-br from-slate-950/88 via-slate-900/82 to-slate-900/72 flex-1">
+                        <div>
+                          {meal.mainMeal?.description && (
+                            <p className="text-slate-200 text-base leading-relaxed line-clamp-3">
+                              {meal.mainMeal.description}
+                            </p>
+                          )}
+                        </div>
+                        <div className="mt-5 grid grid-cols-2 gap-3">
+                          {galleryItems.length > 0 ? galleryItems.map((item, imageIdx) => (
+                            <motion.div
+                              key={`${item.id || item.name || imageIdx}-${item.slotLabel}`}
+                              className="rounded-2xl overflow-hidden border border-white/10 bg-slate-900/70 relative h-28 shadow-lg"
+                              animate={{ y: [0, imageIdx % 2 === 0 ? -3 : 3, 0] }}
+                              transition={{ duration: 5 + imageIdx, repeat: Infinity, ease: 'easeInOut' }}
+                            >
+                              <img src={getMealItemImage(item, meal.mealType)} alt={item.name || item.slotLabel} className="w-full h-full object-cover" />
+                              <div className="absolute inset-0 bg-[linear-gradient(to_top,rgba(2,6,23,0.95),rgba(2,6,23,0.14),rgba(2,6,23,0.02))]" />
+                              <span className="absolute left-2 top-2 px-2 py-1 rounded-full bg-white/95 border border-slate-900/10 text-slate-950 text-[10px] font-black uppercase tracking-wide shadow-md">
+                                {item.slotLabel}
+                              </span>
+                              <p className="absolute inset-x-0 bottom-0 px-2.5 pb-2.5 text-white text-xs font-black leading-tight line-clamp-2 drop-shadow-lg">{item.name || item.slotLabel}</p>
+                            </motion.div>
+                          )) : (
+                            <div className="col-span-2 rounded-2xl border border-white/10 bg-slate-900/70 px-4 py-4">
+                              <p className="text-slate-200 text-sm font-semibold">Sides and dessert images will appear here.</p>
+                            </div>
+                          )}
+                        </div>
+                        <div className="mt-4 grid grid-cols-1 gap-3">
+                          <div className="rounded-2xl bg-slate-900/82 border border-white/10 px-4 py-3 shadow-inner">
+                            <p className="text-amber-200 text-[11px] font-black uppercase tracking-[0.2em] mb-1.5">Sides</p>
+                            <p className="text-white text-base font-semibold line-clamp-2">
+                              {sideNames.join(' • ') || 'Chef selected accompaniments'}
+                            </p>
+                          </div>
+                          <div className="rounded-2xl bg-slate-900/82 border border-white/10 px-4 py-3 shadow-inner">
+                            <p className="text-sky-200 text-[11px] font-black uppercase tracking-[0.2em] mb-1.5">Desserts</p>
+                            <p className="text-white text-base font-semibold line-clamp-2">
+                              {dessertNames.join(' • ') || 'Sweet selection for today'}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                  </motion.div>
+                );
+              })}
           </div>
         </div>
       </div>

@@ -741,13 +741,38 @@ const TVDisplayControlPanel = () => {
                     }
 
                     if (mealSlideData) {
+                      const mealImages = (mealSlideData || []).flatMap((meal) => [
+                        meal.mainMeal?.image_url,
+                        ...(meal.sides || []).map((item) => item?.image_url),
+                        ...(meal.desserts || []).map((item) => item?.image_url),
+                      ]).filter(Boolean).slice(0, 5);
                       return (
-                        <div className="absolute inset-0 bg-gradient-to-br from-emerald-700 via-teal-700 to-cyan-700 flex flex-col items-center justify-center p-4">
-                          <span className="text-4xl mb-2">🍽</span>
-                          <p className="text-white text-sm font-black text-center">Today's Meals</p>
-                          <p className="text-white/90 text-xs font-semibold text-center mt-1 line-clamp-2">
-                            {(mealSlideData || []).map((m) => m.mealType).join(' • ') || 'Breakfast • Lunch • Supper'}
-                          </p>
+                        <div className="absolute inset-0 bg-gradient-to-br from-[#06131a] via-[#0c1f2d] to-[#111827] p-3 overflow-hidden">
+                          <div className="absolute inset-0 opacity-45" style={{ backgroundImage: 'radial-gradient(circle at 18% 18%, rgba(16,185,129,0.28) 0%, transparent 42%), radial-gradient(circle at 78% 24%, rgba(56,189,248,0.22) 0%, transparent 38%)' }} />
+                          <div className="relative h-full flex flex-col">
+                            <div className="flex items-center gap-2 mb-3">
+                              <div className="w-7 h-7 rounded-xl bg-slate-950/75 border border-white/10 flex items-center justify-center text-sm">🍽</div>
+                              <div>
+                                <p className="text-white text-sm font-black leading-none">Today's Meals</p>
+                                <p className="text-slate-200 text-[10px] font-semibold mt-1 line-clamp-1">
+                                  {(mealSlideData || []).map((m) => m.mealType).join(' • ') || 'Breakfast • Lunch • Supper'}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-2 flex-1 min-h-0">
+                              {[0, 1, 2].map((offset) => (
+                                <div key={offset} className="rounded-2xl overflow-hidden bg-slate-950/55 border border-white/10 relative min-h-[84px]">
+                                  {mealImages[offset] ? (
+                                    <img src={mealImages[offset]} alt="Meal" className="w-full h-full object-cover" />
+                                  ) : (
+                                    <div className="w-full h-full bg-gradient-to-br from-emerald-500/40 to-cyan-500/35" />
+                                  )}
+                                  <div className="absolute inset-0 bg-[linear-gradient(to_top,rgba(2,6,23,0.8),rgba(2,6,23,0.12),rgba(2,6,23,0.02))]" />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
                         </div>
                       );
                     }
