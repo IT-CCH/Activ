@@ -213,17 +213,74 @@ const MainDashboard = () => {
     fetchAllActivities();
   }, []);
 
-  const addOneHour = (time) => {
-    if (!time) return '';
-    const [h, m] = time.split(':').map(Number);
-    if (isNaN(h) || isNaN(m)) return '';
-    const nh = (h + 1) % 24;
-    return `${String(nh).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  const sanitizeTimeDraft = (rawValue) => {
+    const cleaned = String(rawValue || '').replace(/[^\d:]/g, '');
+    if (!cleaned) return '';
+
+    if (cleaned.includes(':')) {
+      const [hoursRaw, minutesRaw = ''] = cleaned.split(':');
+      return `${hoursRaw.slice(0, 2)}:${minutesRaw.slice(0, 2)}`;
+    }
+
+    const digits = cleaned.slice(0, 4);
+    if (digits.length <= 2) return digits;
+    return `${digits.slice(0, 2)}:${digits.slice(2, 4)}`;
+  };
+
+  const normalizeTimeValue = (rawValue) => {
+    const draft = sanitizeTimeDraft(rawValue);
+    if (!draft) return '';
+
+    const [hoursRaw, minutesRaw = ''] = draft.split(':');
+    if (!hoursRaw) return '';
+
+    const hours = Number(hoursRaw);
+    if (Number.isNaN(hours) || hours < 0 || hours > 23) return '';
+
+    const minutesText = (minutesRaw || '').padEnd(2, '0').slice(0, 2);
+    const minutes = Number(minutesText);
+    if (Number.isNaN(minutes) || minutes < 0 || minutes > 59) return '';
+
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+  };
+
+  const addMinutesToTime = (timeValue, minutesToAdd = 60) => {
+    const normalized = normalizeTimeValue(timeValue);
+    if (!normalized) return '';
+
+    const [hours, minutes] = normalized.split(':').map(Number);
+    const totalMinutes = (hours * 60) + minutes + (Number(minutesToAdd) || 0);
+    const nextHours = Math.floor(totalMinutes / 60) % 24;
+    const nextMinutes = totalMinutes % 60;
+
+    return `${String(nextHours).padStart(2, '0')}:${String(nextMinutes).padStart(2, '0')}`;
+  };
+
+  const getActivityDurationMinutes = (activityId) => {
+    const selectedActivity = allActivitiesList.find((activity) => activity.id === activityId);
+    return Math.max(1, Number(selectedActivity?.duration_minutes) || 60);
+  };
+
+  const getNextHourTime = () => {
+    const now = new Date();
+    const next = new Date(now);
+    next.setHours(now.getHours() + 1, 0, 0, 0);
+    return `${String(next.getHours()).padStart(2, '0')}:00`;
+  };
+
+  const buildScheduleTimes = (activityId, startValue) => {
+    const normalizedStart = normalizeTimeValue(startValue) || getNextHourTime();
+    const durationMinutes = getActivityDurationMinutes(activityId);
+    return {
+      start_time: normalizedStart,
+      end_time: addMinutesToTime(normalizedStart, durationMinutes),
+    };
   };
 
   const handleScheduleSubmit = async (e) => {
     e.preventDefault();
-    if (!scheduleForm.activity_id || !scheduleForm.start_time) return;
+    const normalizedStart = normalizeTimeValue(scheduleForm.start_time);
+    if (!scheduleForm.activity_id || !normalizedStart) return;
     try {
       const selectedAct = allActivitiesList.find(a => a.id === scheduleForm.activity_id);
       const effectiveCareHomeId = selectedDashCareHomeId || careHomeId;
@@ -231,14 +288,15 @@ const MainDashboard = () => {
         alert('No care home selected.');
         return;
       }
-      const endTime = scheduleForm.end_time || addOneHour(scheduleForm.start_time);
+      const durationMinutes = Math.max(1, Number(selectedAct?.duration_minutes) || 60);
+      const endTime = normalizeTimeValue(scheduleForm.end_time) || addMinutesToTime(normalizedStart, durationMinutes);
       const { data: inserted, error } = await supabase
         .from('activity_sessions')
         .insert([{
           activity_id: scheduleForm.activity_id,
           care_home_id: effectiveCareHomeId,
           session_date: toLocalDateStr(new Date()),
-          start_time: scheduleForm.start_time,
+          start_time: normalizedStart,
           end_time: endTime,
           location: scheduleForm.location || selectedAct?.location || '',
           status: 'scheduled',
@@ -1165,7 +1223,14 @@ const MainDashboard = () => {
                         <ul className="absolute z-50 w-full mt-1 bg-white border-2 border-violet-200 rounded-xl shadow-xl max-h-48 overflow-y-auto">
                           {filtered.map(a => (
                             <li key={a.id} onMouseDown={() => {
-                              setScheduleForm({ ...scheduleForm, activity_id: a.id, location: a.location || '' });
+                              const nextTimes = buildScheduleTimes(a.id, getNextHourTime());
+                              setScheduleForm({
+                                ...scheduleForm,
+                                activity_id: a.id,
+                                location: a.location || '',
+                                start_time: nextTimes.start_time,
+                                end_time: nextTimes.end_time,
+                              });
                               setScheduleSearch(a.name);
                               setScheduleDropdownOpen(false);
                             }} className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-violet-50 transition text-sm ${scheduleForm.activity_id === a.id ? 'bg-violet-50' : ''}`}>
@@ -1192,14 +1257,50 @@ const MainDashboard = () => {
                       <Icon name="Clock" size={14} className="text-violet-600" />
                       Start Time *
                     </label>
-                    <input type="time" value={scheduleForm.start_time} onChange={e => setScheduleForm({ ...scheduleForm, start_time: e.target.value, end_time: scheduleForm.end_time || addOneHour(e.target.value) })} className="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent" required />
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={5}
+                      placeholder="HH:MM"
+                      value={scheduleForm.start_time}
+                      onChange={e => {
+                        const draftStart = sanitizeTimeDraft(e.target.value);
+                        const normalizedStart = normalizeTimeValue(draftStart);
+                        const durationMinutes = getActivityDurationMinutes(scheduleForm.activity_id);
+                        setScheduleForm({
+                          ...scheduleForm,
+                          start_time: draftStart,
+                          end_time: normalizedStart ? addMinutesToTime(normalizedStart, durationMinutes) : scheduleForm.end_time,
+                        });
+                      }}
+                      onBlur={e => {
+                        const normalizedStart = normalizeTimeValue(e.target.value);
+                        const durationMinutes = getActivityDurationMinutes(scheduleForm.activity_id);
+                        setScheduleForm({
+                          ...scheduleForm,
+                          start_time: normalizedStart,
+                          end_time: normalizedStart ? addMinutesToTime(normalizedStart, durationMinutes) : scheduleForm.end_time,
+                        });
+                      }}
+                      className="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                      required
+                    />
                   </div>
                   <div>
                     <label className="block text-sm font-bold text-gray-700 mb-1.5 flex items-center gap-1.5">
                       <Icon name="Clock" size={14} className="text-violet-600" />
                       End Time
                     </label>
-                    <input type="time" value={scheduleForm.end_time} onChange={e => setScheduleForm({ ...scheduleForm, end_time: e.target.value })} className="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent" />
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={5}
+                      placeholder="HH:MM"
+                      value={scheduleForm.end_time}
+                      onChange={e => setScheduleForm({ ...scheduleForm, end_time: sanitizeTimeDraft(e.target.value) })}
+                      onBlur={e => setScheduleForm({ ...scheduleForm, end_time: normalizeTimeValue(e.target.value) })}
+                      className="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                    />
                   </div>
                 </div>
 

@@ -49,17 +49,68 @@ const CalendarPage = () => {
     care_home_id: ''
   });
 
-  const addOneHourToTime = (timeValue) => {
-    if (!timeValue) return '';
+  const sanitizeTimeDraft = (rawValue) => {
+    const cleaned = String(rawValue || '').replace(/[^\d:]/g, '');
+    if (!cleaned) return '';
 
-    const [hours, minutes] = String(timeValue).split(':').map(Number);
-    if (Number.isNaN(hours) || Number.isNaN(minutes)) return '';
+    if (cleaned.includes(':')) {
+      const [hoursRaw, minutesRaw = ''] = cleaned.split(':');
+      return `${hoursRaw.slice(0, 2)}:${minutesRaw.slice(0, 2)}`;
+    }
 
-    const totalMinutes = (hours * 60) + minutes + 60;
+    const digits = cleaned.slice(0, 4);
+    if (digits.length <= 2) return digits;
+    return `${digits.slice(0, 2)}:${digits.slice(2, 4)}`;
+  };
+
+  const normalizeTimeValue = (rawValue) => {
+    const draft = sanitizeTimeDraft(rawValue);
+    if (!draft) return '';
+
+    const [hoursRaw, minutesRaw = ''] = draft.split(':');
+    if (!hoursRaw) return '';
+
+    const hours = Number(hoursRaw);
+    if (Number.isNaN(hours) || hours < 0 || hours > 23) return '';
+
+    const minutesText = (minutesRaw || '').padEnd(2, '0').slice(0, 2);
+    const minutes = Number(minutesText);
+    if (Number.isNaN(minutes) || minutes < 0 || minutes > 59) return '';
+
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+  };
+
+  const addMinutesToTime = (timeValue, minutesToAdd = 60) => {
+    const normalized = normalizeTimeValue(timeValue);
+    if (!normalized) return '';
+
+    const [hours, minutes] = normalized.split(':').map(Number);
+    const totalMinutes = (hours * 60) + minutes + (Number(minutesToAdd) || 0);
     const endHours = Math.floor(totalMinutes / 60) % 24;
     const endMinutes = totalMinutes % 60;
 
     return `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`;
+  };
+
+  const getActivityDurationMinutes = (activityId) => {
+    const selectedActivity = allActivities.find((activity) => activity.id === activityId);
+    return Math.max(1, Number(selectedActivity?.duration_minutes) || 60);
+  };
+
+  const getNextHourTime = () => {
+    const now = new Date();
+    const next = new Date(now);
+    next.setHours(now.getHours() + 1, 0, 0, 0);
+    return `${String(next.getHours()).padStart(2, '0')}:00`;
+  };
+
+  const buildScheduleTimes = (activityId, startValue) => {
+    const normalizedStart = normalizeTimeValue(startValue) || getNextHourTime();
+    const durationMinutes = getActivityDurationMinutes(activityId);
+    return {
+      start_time: normalizedStart,
+      end_time: addMinutesToTime(normalizedStart, durationMinutes),
+    };
   };
 
   // Fetch care homes list for admins
@@ -250,9 +301,15 @@ const CalendarPage = () => {
       }
 
       // Default end_time to one hour after the chosen start time.
-      let endTime = scheduleFormData.end_time;
-      if (!endTime && scheduleFormData.start_time) {
-        endTime = addOneHourToTime(scheduleFormData.start_time);
+      const normalizedStart = normalizeTimeValue(scheduleFormData.start_time);
+      if (!normalizedStart) {
+        alert('Please enter a valid start time in HH:MM format');
+        return;
+      }
+
+      let endTime = normalizeTimeValue(scheduleFormData.end_time);
+      if (!endTime) {
+        endTime = addMinutesToTime(normalizedStart, selectedActivity.duration_minutes || 60);
       }
 
       const { data: insertedData, error } = await supabase
@@ -261,7 +318,7 @@ const CalendarPage = () => {
           activity_id: scheduleFormData.activity_id,
           care_home_id: care_home_id,
           session_date: dateToUse,
-          start_time: scheduleFormData.start_time,
+          start_time: normalizedStart,
           end_time: endTime || scheduleFormData.start_time,
           location: scheduleFormData.location || selectedActivity.location || '',
           status: 'scheduled',
@@ -941,10 +998,13 @@ const CalendarPage = () => {
                             <li
                               key={activity.id}
                               onMouseDown={() => {
+                                const nextTimes = buildScheduleTimes(activity.id, getNextHourTime());
                                 setScheduleFormData({
                                   ...scheduleFormData,
                                   activity_id: activity.id,
-                                  location: activity.location || ''
+                                  location: activity.location || '',
+                                  start_time: nextTimes.start_time,
+                                  end_time: nextTimes.end_time,
                                 });
                                 setActivitySearch(activity.name);
                                 setActivityDropdownOpen(false);
@@ -1037,14 +1097,28 @@ const CalendarPage = () => {
                       Start Time *
                     </label>
                     <input
-                      type="time"
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={5}
+                      placeholder="HH:MM"
                       value={scheduleFormData.start_time}
                       onChange={e => {
-                        const startTime = e.target.value;
+                        const startTime = sanitizeTimeDraft(e.target.value);
+                        const normalizedStart = normalizeTimeValue(startTime);
+                        const durationMinutes = getActivityDurationMinutes(scheduleFormData.activity_id);
                         setScheduleFormData({
                           ...scheduleFormData,
                           start_time: startTime,
-                          end_time: addOneHourToTime(startTime)
+                          end_time: normalizedStart ? addMinutesToTime(normalizedStart, durationMinutes) : scheduleFormData.end_time,
+                        });
+                      }}
+                      onBlur={e => {
+                        const normalizedStart = normalizeTimeValue(e.target.value);
+                        const durationMinutes = getActivityDurationMinutes(scheduleFormData.activity_id);
+                        setScheduleFormData({
+                          ...scheduleFormData,
+                          start_time: normalizedStart,
+                          end_time: normalizedStart ? addMinutesToTime(normalizedStart, durationMinutes) : scheduleFormData.end_time,
                         });
                       }}
                       className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
@@ -1057,15 +1131,20 @@ const CalendarPage = () => {
                       End Time
                     </label>
                     <input
-                      type="time"
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={5}
                       value={scheduleFormData.end_time}
                       onChange={e =>
-                        setScheduleFormData({ ...scheduleFormData, end_time: e.target.value })
+                        setScheduleFormData({ ...scheduleFormData, end_time: sanitizeTimeDraft(e.target.value) })
+                      }
+                      onBlur={e =>
+                        setScheduleFormData({ ...scheduleFormData, end_time: normalizeTimeValue(e.target.value) })
                       }
                       className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
-                      placeholder="Auto-filled to one hour later"
+                      placeholder="HH:MM"
                     />
-                    <p className="text-xs text-gray-400 mt-1">Auto-fills to one hour after the start time, but you can still change it.</p>
+                    <p className="text-xs text-gray-400 mt-1">Auto-fills from the selected activity duration, but you can still change it.</p>
                   </div>
                 </div>
 
